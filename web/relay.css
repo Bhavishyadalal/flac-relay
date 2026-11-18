@@ -62,6 +62,7 @@ button, input { font: inherit; }
   transition: color .24s, background-color .24s, border-color .24s;
 }
 .relay-nav a:hover, .relay-nav a[aria-current] { color: #faf9ff; background: #17141e; border-color: #24202d; }
+.relay-nav .nav-admin { color: var(--accent); }
 .relay-account { justify-self: end; min-width: 0; }
 .relay-account .header-user-pill { max-width: 155px; }
 #header-user-email { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -172,7 +173,17 @@ button, input { font: inherit; }
   color: #aaa0b9; font: 500 10px/1.5 'IBM Plex Mono', monospace;
   text-transform: uppercase; letter-spacing: .1em; background: #0c0a1075;
 }
-.gateway-state { display: inline-flex; align-items: center; gap: 8px; }
+.gateway-state { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+#gateway-retry {
+  min-height: 36px;
+  padding: 4px 9px;
+  border: 1px solid #423457;
+  border-radius: 7px;
+  background: #15111e;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
 .gateway-state i { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 12px #a487ff88; }
 .gateway-state:has([data-state='offline']) i { background: #fc7895; box-shadow: none; }
 
@@ -244,7 +255,7 @@ footer > div { flex-wrap: wrap; }
 @media (max-width: 540px) {
   .container { padding-inline: 13px; }
   .relay-header { grid-template-columns: 1fr auto; row-gap: 7px; padding-block: 11px 8px; }
-  .relay-nav { grid-row: 2; grid-column: 1 / -1; }
+  .relay-nav { grid-row: 2; grid-column: 1 / -1; flex-wrap: wrap; }
   .relay-nav a { padding: 5px 11px; min-height: 32px; }
   .relay-account { grid-row: 1; grid-column: 2; }
   .relay-hero { min-height: 495px; border-radius: 15px; }
@@ -359,3 +370,6 @@ footer > div { flex-wrap: wrap; }
   .addon-steps { grid-template-columns: minmax(0,1fr); }
   .addon-generator .link-content { flex-basis: 100%; }
 }
+
+.relay-auth .relay-auth-admin { margin-top: 16px; text-align: center; font-size: 13px; }
+.relay-auth-admin a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); }

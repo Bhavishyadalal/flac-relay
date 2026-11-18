@@ -369,31 +369,68 @@
   };
 
   var gatewayStatus = document.getElementById('gateway-status');
-  fetch('/health').then(function(res) {
-    gatewayStatus.textContent = res.ok ? 'Gateway online' : 'Gateway unavailable';
-    gatewayStatus.dataset.state = res.ok ? 'online' : 'offline';
-  }).catch(function() {
-    gatewayStatus.textContent = 'Gateway unavailable';
-    gatewayStatus.dataset.state = 'offline';
-  });
+  var gatewayRetry = document.getElementById('gateway-retry');
+  var checkingGateway = false;
 
-  // Telemetry Ping Check
-  window.runLivePingCheck = function() {
-    var btn = document.getElementById('ping-btn-text');
-    if (btn) btn.innerText = 'Probing Nodes...';
-    var t0 = performance.now();
-    fetch('/health')
-      .then(function() {
-        var elapsed = Math.round(performance.now() - t0);
-        var el1 = document.getElementById('ping-monochrome');
-        if (el1) el1.innerText = (elapsed + 240) + ' ms';
-        var el2 = document.getElementById('ping-arcod');
-        if (el2) el2.innerText = (elapsed + 280) + ' ms';
-        if (btn) btn.innerText = 'Pings Updated!';
-        setTimeout(function() { if (btn) btn.innerText = 'Test Ping Latency'; }, 2000);
-      })
-      .catch(function() {
-        if (btn) btn.innerText = 'Ping Check Failed';
-      });
+  async function measureGateway() {
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 12000);
+    var started = performance.now();
+    try {
+      var response = await fetch('/health', { cache: 'no-store', signal: controller.signal });
+      if (!response.ok || (await response.json())?.ok !== true) {
+        throw new Error('Invalid gateway health response');
+      }
+      return Math.round(performance.now() - started);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function checkGateway() {
+    if (checkingGateway) return;
+    checkingGateway = true;
+    if (document.activeElement === gatewayRetry) gatewayStatus.focus();
+    gatewayRetry.hidden = true;
+    gatewayStatus.dataset.state = 'checking';
+    gatewayStatus.textContent = 'Checking gateway';
+    var delays = [1500, 4000];
+    try {
+      for (var attempt = 0; ; attempt++) {
+        try {
+          await measureGateway();
+          gatewayStatus.dataset.state = 'online';
+          gatewayStatus.textContent = 'Gateway online';
+          return;
+        } catch {
+          if (attempt === delays.length) break;
+          gatewayStatus.textContent = 'Waiting for gateway';
+          await new Promise(function(resolve) { setTimeout(resolve, delays[attempt]); });
+        }
+      }
+      gatewayStatus.dataset.state = 'offline';
+      gatewayStatus.textContent = 'Gateway unreachable';
+      gatewayRetry.hidden = false;
+    } finally {
+      checkingGateway = false;
+    }
+  }
+
+  gatewayRetry.addEventListener('click', checkGateway);
+  window.addEventListener('online', checkGateway);
+  checkGateway();
+
+  window.runLivePingCheck = async function() {
+    var button = document.getElementById('ping-btn');
+    var label = document.getElementById('ping-btn-text');
+    button.disabled = true;
+    label.textContent = 'Testing gateway';
+    try {
+      label.textContent = 'Gateway · ' + await measureGateway() + ' ms';
+    } catch {
+      label.textContent = 'Test failed · Retry';
+    } finally {
+      button.disabled = false;
+    }
   };
 })();

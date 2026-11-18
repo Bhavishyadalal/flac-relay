@@ -117,7 +117,10 @@ for (const [filename, contentType] of Object.entries(webAssets)) {
 
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/tv', async (_request, reply) => reply.type('text/html; charset=utf-8').send(legacyTvPage));
-app.get('/health', async () => ({ ok: true }));
+app.get('/health', async (_request, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  return { ok: true };
+});
 
 app.get('/api/telemetry', async () => {
   const sources = ('getSources' in (racingEngine as any) ? (racingEngine as RacingProvider).getSources() : []).map(s => ({

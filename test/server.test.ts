@@ -7,9 +7,10 @@ import { loadConfig } from '../src/config.js';
 
 const config = loadConfig();
 
-test('GET /health returns ok', async () => {
+test('GET /health returns an uncached health response', async () => {
   const res = await app.inject({ method: 'GET', url: '/health' });
   assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['cache-control'], 'no-store');
   assert.deepEqual(JSON.parse(res.payload), { ok: true });
 });
 

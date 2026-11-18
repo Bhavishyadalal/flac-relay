@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/panels.css">
-<link rel="stylesheet" href="/assets/relay.css">
+<link rel="stylesheet" href="/assets/relay.css?v=gateway-recovery">
 </head>
 <body>
 
@@ -24,9 +24,10 @@
       <a href="#addon-section">Addon</a>
       <a href="#hardware-lab">Audio lab</a>
       <a href="/tv" class="nav-tv">TV</a>
+      <a href="/admin" class="nav-admin">Admin</a>
     </nav>
     <div class="relay-account">
-      <button type="button" class="relay-sign-in" id="header-signin-btn" onclick="openAuthModal()">Sign in <span aria-hidden="true">→</span></button>
+      <button type="button" class="relay-sign-in" id="header-signin-btn" onclick="openAuthModal()">Personal link <span aria-hidden="true">→</span></button>
       <div class="header-user-pill" id="header-user-pill" style="display:none">
         <div class="header-user-avatar" id="header-user-avatar">U</div>
         <span id="header-user-email"></span>
@@ -56,7 +57,7 @@
 <button type="button" class="sample-chip" onclick="quickSearch('The Weeknd Blinding Lights')">The Weeknd</button></div>
       </div>
       <div class="hero-footer">
-        <span class="gateway-state"><i aria-hidden="true"></i><span id="gateway-status">Checking gateway</span></span>
+        <span class="gateway-state"><i aria-hidden="true"></i><span id="gateway-status" role="status" tabindex="-1">Checking gateway</span><button type="button" id="gateway-retry" hidden>Retry</button></span>
         <span class="direct-playback">Direct playback</span>
       </div>
     </section>
@@ -112,11 +113,11 @@
     <div class="section-head">
       <div>
         <h2>Music sources</h2>
-        <p style="font-size:14px; color:var(--text-muted);">Provider status and gateway connectivity.</p>
+        <p style="font-size:14px; color:var(--text-muted);">Sources used by FLAC Relay. The gateway test measures the response time from your browser.</p>
       </div>
-      <button class="ping-btn" onclick="runLivePingCheck()">
+      <button type="button" class="ping-btn" id="ping-btn" onclick="runLivePingCheck()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        <span id="ping-btn-text">Test Ping Latency</span>
+        <span id="ping-btn-text" aria-live="polite">Test gateway</span>
       </button>
     </div>
 
@@ -143,10 +144,6 @@
             <span class="spec-label">Audio Depth</span>
             <span class="spec-value">24-Bit / 192kHz</span>
           </div>
-          <div class="spec-item" style="text-align:right;">
-            <span class="spec-label">Ping Latency</span>
-            <span class="spec-latency" id="ping-monochrome">310 ms</span>
-          </div>
         </div>
       </div>
 
@@ -171,10 +168,6 @@
           <div class="spec-item">
             <span class="spec-label">Audio Depth</span>
             <span class="spec-value">FLAC Lossless</span>
-          </div>
-          <div class="spec-item" style="text-align:right;">
-            <span class="spec-label">Ping Latency</span>
-            <span class="spec-latency" id="ping-arcod">380 ms</span>
           </div>
         </div>
       </div>
@@ -751,7 +744,7 @@
   <dialog class="relay-auth" id="auth-modal" aria-labelledby="relay-auth-title" aria-describedby="relay-auth-description">
     <div class="relay-auth-head">
       <span class="relay-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-      <button type="button" class="btn-icon" onclick="closeAuthModal()" aria-label="Close sign in">×</button>
+      <button type="button" class="btn-icon" onclick="closeAuthModal()" aria-label="Close personal link dialog">×</button>
     </div>
     <h2 id="relay-auth-title">Get a personal link</h2>
     <p id="relay-auth-description">Continue as a guest or use a connected account to claim your own addon link.</p>
@@ -762,6 +755,7 @@
       <button type="button" class="btn-install" onclick="usePublicAddon()">Use the public addon</button>
     </div>
     <p id="auth-feedback" class="addon-help-status" role="status" hidden></p>
+    <p class="relay-auth-admin"><a href="/admin">Admin sign-in</a></p>
   </dialog>
 
   <!-- QR Modal -->
@@ -791,7 +785,7 @@
   </footer>
 </div>
 
-<script src="/assets/addon.js" defer></script>
+<script src="/assets/addon.js?v=gateway-recovery" defer></script>
 <script src="/assets/audio-lab.js" defer></script>
 <script src="/assets/player.js" defer></script>
 <script src="/assets/motion.js" defer></script>
