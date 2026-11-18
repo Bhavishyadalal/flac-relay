@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -94,6 +95,23 @@ const manifests = {
   eljohnzc: { id: 'com.bitchord.qobuz.eljohnzc', name: 'Lossless Alternate', version: '1.0.0' },
   instable: { id: 'com.bitchord.qobuz.instable', name: 'Arcod Lossless', version: '1.0.0' },
 } as const;
+
+const webAssets = {
+  'addon.js': 'text/javascript; charset=utf-8',
+  'audio-lab.js': 'text/javascript; charset=utf-8',
+  'motion.js': 'text/javascript; charset=utf-8',
+  'panels.css': 'text/css; charset=utf-8',
+  'player.js': 'text/javascript; charset=utf-8',
+  'relay.css': 'text/css; charset=utf-8',
+  'nocturne.webp': 'image/webp',
+} as const;
+
+for (const [filename, contentType] of Object.entries(webAssets)) {
+  const location = new URL(`../web/${filename}`, import.meta.url);
+  app.get(`/assets/${filename}`, async (_request, reply) => {
+    return reply.type(contentType).header('Cache-Control', 'public, max-age=3600').send(await readFile(location));
+  });
+}
 
 app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(homePage));
 app.get('/tv', async (_request, reply) => reply.type('text/html; charset=utf-8').send(legacyTvPage));
@@ -339,7 +357,7 @@ app.get('/api/auth/me', async (request, reply) => {
   return reply.send({
     authenticated: true,
     user,
-    addon: addon ? { slug: addon.addon_slug, dailyLimit: addon.daily_limit, isRevoked: addon.is_revoked } : null,
+    addon: addon ? { slug: addon.addon_slug, isRevoked: addon.is_revoked } : null,
     tracker,
   });
 });
@@ -414,14 +432,12 @@ app.post<{ Body?: { email?: string; customSlug?: string; zombieTracker?: string;
         hardwareFingerprint,
         customSlug: request.body?.customSlug,
       });
-      const quota = await db.getQuotaStatus(addon.addon_slug);
       return reply.send({
         ok: true,
         isNew,
         slug: addon.addon_slug,
         email: addon.email,
         tracker,
-        quota,
       });
     } catch (err: any) {
       const message = err?.message || 'Could not claim addon';
@@ -435,13 +451,6 @@ app.post<{ Body?: { email?: string; customSlug?: string; zombieTracker?: string;
     }
   }
 );
-
-app.get<{ Params: { slug: string } }>('/api/user/quota/:slug', async (request, reply) => {
-  const slug = request.params.slug;
-  if (!slug) throw badRequest('slug is required');
-  const quota = await db.getQuotaStatus(slug);
-  return reply.send({ ok: true, quota });
-});
 
 // --- Master Admin Console Routes ---
 
@@ -652,13 +661,9 @@ function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: 
   });
 
   app.get<{ Params: { id: string; userSlug?: string }; Querystring: { quality?: string; atmos?: string } }>(route('/stream/:id'), async (request, reply) => {
-    if (request.params.userSlug) {
-      const clientIp = (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-      const access = await db.recordStreamAccess(request.params.userSlug, clientIp, userAgent);
-      if (!access.allowed) {
-        return reply.code(429).send({ error: access.reason || 'Playback quota exceeded' });
-      }
+    const slug = request.params.userSlug;
+    if (slug && (await db.getAddonBySlug(slug))?.is_revoked) {
+      return reply.code(403).send({ error: 'This addon link has been revoked.' });
     }
     const quality = parseQuality(request.query.quality);
     const atmos = request.query.atmos ?? 'auto';

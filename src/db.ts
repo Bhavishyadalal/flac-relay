@@ -19,18 +19,6 @@ export interface UserAddonRecord {
   created_at: string;
 }
 
-export interface QuotaStatus {
-  slug: string;
-  streamCount: number;
-  maxStreams: number;
-  activeDevices: number;
-  maxDevices: number;
-  ipCount: number;
-  maxIps: number;
-  isRevoked: boolean;
-  resetsAtUtc: string;
-}
-
 function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('SUPABASE_TIMEOUT')), timeoutMs);
@@ -59,9 +47,6 @@ export class AddonDatabase {
   private lastCircuitTrip = 0;
   private timeoutMs = 2000;
   private localAddons: Map<string, UserAddonRecord> = new Map();
-  private localDailyUsage: Map<string, { count: number; date: string }> = new Map();
-  private localDevices: Map<string, Set<string>> = new Map();
-  private localIps: Map<string, Set<string>> = new Map();
   private localProviders: Map<string, any> = new Map([
     ['monochrome', { id: 'monochrome', name: 'Monochrome Lossless Core', type: 'built-in', base_url: 'https://tracks.monochrome.st', is_enabled: true, health_status: 'operational', created_at: new Date().toISOString() }],
     ['instable', { id: 'instable', name: 'Arcod Lossless Source', type: 'built-in', base_url: 'https://arcod.xyz', is_enabled: false, health_status: 'offline', created_at: new Date().toISOString() }],
@@ -305,7 +290,7 @@ export class AddonDatabase {
       email: normalizedEmail,
       addon_slug: baseSlug,
       device_fingerprint: params.deviceFingerprint,
-      daily_limit: 300,
+      daily_limit: 0, // Legacy Supabase column, unused for playback.
       is_revoked: false,
       created_at: new Date().toISOString(),
     };
@@ -339,179 +324,6 @@ export class AddonDatabase {
     this.localAddons.set(baseSlug, insertPayload as UserAddonRecord);
     return { addon: insertPayload as UserAddonRecord, isNew: true };
   }
-
-  async getQuotaStatus(slug: string): Promise<QuotaStatus> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    const nextUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-
-    const addon = await this.getAddonBySlug(slug);
-    const maxStreams = addon?.daily_limit ?? 300;
-    const isRevoked = addon?.is_revoked ?? false;
-
-    if (this.isSupabaseAvailable()) {
-      try {
-        const [usageRes, leaseRes, ipRes] = await this.queryWithTimeout(
-          Promise.all([
-            this.client!.from('addon_daily_usage').select('stream_count').eq('slug', slug).eq('usage_date', today).single(),
-            this.client!.from('addon_device_leases').select('device_hash').eq('slug', slug).gte('last_seen_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()),
-            this.client!.from('addon_daily_ips').select('ip_address').eq('slug', slug).eq('usage_date', today),
-          ])
-        );
-
-        const streamCount = usageRes.data?.stream_count ?? 0;
-        const activeDevices = leaseRes.data ? leaseRes.data.length : 1;
-        const ipCount = ipRes.data ? ipRes.data.length : 1;
-
-        return {
-          slug,
-          streamCount,
-          maxStreams,
-          activeDevices: Math.max(1, activeDevices),
-          maxDevices: 2,
-          ipCount: Math.max(1, ipCount),
-          maxIps: 15,
-          isRevoked,
-          resetsAtUtc: nextUtc.toISOString(),
-        };
-      } catch {
-        this.tripCircuit();
-      }
-    }
-
-    // Local fallback quota
-    const localUsage = this.localDailyUsage.get(`${slug}:${today}`)?.count ?? 0;
-    const activeDevs = this.localDevices.get(slug)?.size ?? 1;
-    const activeIps = this.localIps.get(`${slug}:${today}`)?.size ?? 1;
-
-    return {
-      slug,
-      streamCount: localUsage,
-      maxStreams,
-      activeDevices: Math.max(1, activeDevs),
-      maxDevices: 2,
-      ipCount: Math.max(1, activeIps),
-      maxIps: 15,
-      isRevoked,
-      resetsAtUtc: nextUtc.toISOString(),
-    };
-  }
-
-  // Intercept stream execution: verify quota, register device lease & ip
-  async recordStreamAccess(slug: string, clientIp: string, userAgent: string): Promise<{ allowed: boolean; reason?: string }> {
-    const today = new Date().toISOString().split('T')[0];
-    const addon = await this.getAddonBySlug(slug);
-    if (!addon) return { allowed: true }; // Allow root/legacy queries if not in db
-
-    if (addon.is_revoked) {
-      return { allowed: false, reason: 'This personal addon link has been revoked by administration.' };
-    }
-
-    if (this.isSupabaseAvailable()) {
-      try {
-        // 1. Check & increment daily usage
-        const { data: usageData } = await this.queryWithTimeout(
-          this.client!
-            .from('addon_daily_usage')
-            .select('stream_count')
-            .eq('slug', slug)
-            .eq('usage_date', today)
-            .single()
-        );
-
-        const currentStreams = usageData?.stream_count ?? 0;
-        if (currentStreams >= addon.daily_limit) {
-          return {
-            allowed: false,
-            reason: `Daily stream quota exceeded (${addon.daily_limit} tracks). Resets at 00:00 UTC.`,
-          };
-        }
-
-        // 2. Check & register IP address
-        const { data: ips } = await this.queryWithTimeout(
-          this.client!
-            .from('addon_daily_ips')
-            .select('ip_address')
-            .eq('slug', slug)
-            .eq('usage_date', today)
-        );
-        const currentIps = (ips ?? []).map((x: { ip_address: string }) => x.ip_address);
-        if (!currentIps.includes(clientIp)) {
-          if (currentIps.length >= 15) {
-            return {
-              allowed: false,
-              reason: 'Daily IP diversity cap exceeded (Max 15 distinct IPs per 24 hours). Resets at 00:00 UTC.',
-            };
-          }
-          await this.queryWithTimeout(
-            this.client!
-              .from('addon_daily_ips')
-              .upsert({ slug, ip_address: clientIp, usage_date: today })
-          );
-        }
-
-        // 3. Sliding 10-minute device lease check
-        const deviceHash = createHash('sha256').update(`${clientIp}:${userAgent}`).digest('hex').substring(0, 16);
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-
-        const { data: activeLeases } = await this.queryWithTimeout(
-          this.client!
-            .from('addon_device_leases')
-            .select('device_hash')
-            .eq('slug', slug)
-            .gte('last_seen_at', tenMinutesAgo)
-        );
-
-        const activeHashes = (activeLeases ?? []).map((x: { device_hash: string }) => x.device_hash);
-        if (!activeHashes.includes(deviceHash) && activeHashes.length >= 2) {
-          return {
-            allowed: false,
-            reason: 'Maximum concurrent device limit (2 devices) reached. Stop playback on another device or wait 10 minutes for lease expiry.',
-          };
-        }
-
-        // Update lease and usage count
-        await this.queryWithTimeout(
-          Promise.all([
-            this.client!.from('addon_device_leases').upsert({ slug, device_hash: deviceHash, last_seen_at: new Date().toISOString() }),
-            this.client!.from('addon_daily_usage').upsert({ slug, usage_date: today, stream_count: currentStreams + 1 }),
-          ])
-        );
-
-        return { allowed: true };
-      } catch {
-        this.tripCircuit();
-      }
-    }
-
-    // Local resilient stream recording
-    const usageKey = `${slug}:${today}`;
-    const curUsage = this.localDailyUsage.get(usageKey)?.count ?? 0;
-    if (curUsage >= addon.daily_limit) {
-      return { allowed: false, reason: `Daily stream quota exceeded (${addon.daily_limit} tracks). Resets at 00:00 UTC.` };
-    }
-    this.localDailyUsage.set(usageKey, { count: curUsage + 1, date: today });
-
-    // Track local IPs
-    if (!this.localIps.has(usageKey)) this.localIps.set(usageKey, new Set());
-    const ipSet = this.localIps.get(usageKey)!;
-    if (!ipSet.has(clientIp)) {
-      if (ipSet.size >= 15) {
-        return { allowed: false, reason: 'Daily IP diversity cap exceeded (Max 15 distinct IPs per 24 hours).' };
-      }
-      ipSet.add(clientIp);
-    }
-
-    // Track local devices
-    if (!this.localDevices.has(slug)) this.localDevices.set(slug, new Set());
-    const devSet = this.localDevices.get(slug)!;
-    const deviceHash = createHash('sha256').update(`${clientIp}:${userAgent}`).digest('hex').substring(0, 16);
-    devSet.add(deviceHash);
-
-    return { allowed: true };
-  }
-
-  // --- Admin Console Operations ---
 
   async getAllUserAddons(options?: {
     search?: string;

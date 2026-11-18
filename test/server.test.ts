@@ -19,7 +19,7 @@ test('GET / returns modern web portal', async () => {
   assert.match(res.headers['content-type'] ?? '', /text\/html/);
   assert.match(res.payload, /FLAC Relay/);
   assert.match(res.payload, /addon-url/);
-  assert.match(res.payload, /generateNewLink/);
+  assert.match(res.payload, /\/assets\/addon\.js/);
 });
 
 test('GET /tv returns lightweight legacy TV page', async () => {
@@ -193,17 +193,8 @@ test('POST /api/user/claim-addon enforces anti-sybil and sets __rz_tracker cooki
   const dataDisposable = JSON.parse(resDisposable.payload);
   assert.match(dataDisposable.error, /Disposable or temporary email/);
 
-  // 7. Check quota endpoint
-  const quotaRes = await app.inject({
-    method: 'GET',
-    url: `/api/user/quota/${data1.slug}`,
-  });
-  assert.equal(quotaRes.statusCode, 200);
-  const quotaData = JSON.parse(quotaRes.payload);
-  assert.equal(quotaData.ok, true);
-  assert.equal(quotaData.quota.maxStreams, 300);
-  assert.equal(quotaData.quota.maxDevices, 2);
-  assert.equal(quotaData.quota.maxIps, 15);
+  assert.equal('quota' in data1, false);
+
 });
 
 test('Admin Console endpoints: auth, overview, provider toggling, and link revocation', async () => {
@@ -281,6 +272,42 @@ test('Admin Console endpoints: auth, overview, provider toggling, and link revoc
     headers: { cookie: sessionCookie },
     payload: { id: 'monochrome', enabled: true },
   });
+});
+
+test('personal streaming remains uncapped across devices and IPs and honors revocation', async () => {
+  const claim = await app.inject({
+    method: 'POST',
+    url: '/api/user/claim-addon',
+    payload: { email: 'mobile-stream-check@example.net' },
+  });
+  assert.equal(claim.statusCode, 200);
+  const { slug } = claim.json();
+  const id = publicId({ upstreamId: 'monochrome:123', title: 'Fixture track' }, config.idSecret);
+  const url = `/u/${slug}/stream/${id}`;
+
+  for (let index = 0; index < 305; index++) {
+    const playback = await app.inject({
+      url,
+      remoteAddress: `192.0.2.${index % 20 + 1}`,
+      headers: { 'user-agent': `Fixture device ${index % 4}` },
+    });
+    assert.equal(playback.statusCode, 200, `Stream request ${index + 1}`);
+    assert.match(playback.json().url, /^https:\/\//);
+  }
+
+  const login = await app.inject({
+    method: 'POST',
+    url: '/api/admin/login',
+    payload: { password: config.adminPassword },
+  });
+  const revoke = await app.inject({
+    method: 'POST',
+    url: '/api/admin/addon/revoke',
+    headers: { authorization: `Bearer ${login.json().token}` },
+    payload: { slug, isRevoked: true },
+  });
+  assert.equal(revoke.statusCode, 200);
+  assert.equal((await app.inject(url)).statusCode, 403);
 });
 
 test('Direct Auth endpoints: providers, guest session, and me', async () => {

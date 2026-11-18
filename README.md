@@ -6,7 +6,7 @@ Based on [ReZenOnance by KATx-dev](https://github.com/KATx-dev/ReZenOnance).
 
 **FLAC Relay** aggregates verified high-resolution FLAC streams (up to **24-bit / 192 kHz**) into a unified, high-performance lossless music addon compatible with **Mochy**, **Metrofuse**, **EchoMusic**, and custom players. It operates in a dual-distribution architecture:
 
-1. **Hosted Web Portal & Gateway**: A modern, glassmorphic audiophile hub providing live provider health telemetry, an interactive hardware & gear diagnostic lab, an in-browser lossless player with real-time frequency visualizer, and personalized rate-limited addon endpoints (`/u/:userSlug/manifest.json`).
+1. **Hosted Web Portal & Gateway**: A modern, glassmorphic audiophile hub providing live provider health telemetry, an interactive hardware & gear diagnostic lab, an in-browser lossless player with real-time frequency visualizer, and personal addon endpoints (`/u/:userSlug/manifest.json`).
 2. **Standalone Community Release**: A plug-and-play, zero-database, zero-auth Node.js deployment for self-hosters on Docker, Vercel, Railway, or home servers.
 
 ---
@@ -20,9 +20,6 @@ Based on [ReZenOnance by KATx-dev](https://github.com/KATx-dev/ReZenOnance).
   - **Self-Healing Zombie Vault**: Triple-storage identity synchronization across Cookies, `localStorage`, and `IndexedDB` that auto-resurrects cleared cookies.
   - **Hardware & Canvas Fingerprinting**: WebGL GPU signature and 2D canvas sub-pixel rasterization hash that enforces a 1-addon policy even in Incognito mode.
   - **Disposable Email Blacklist**: Rejects burner email domains to enforce authentic accounts.
-  - **300 Tracks / Day**: Rolling daily stream allocation resetting at `00:00 UTC`.
-  - **Max 2 Concurrent Devices**: Sliding 10-minute window leases prevent credential sharing while keeping desktop and mobile in sync.
-  - **Max 15 Unique IPs / Day**: Anti-sybil ceiling accommodating cellular/Wi-Fi transitions.
 - **Lossless Audio & Gear Diagnostic Lab**: Browser-based Web Audio API suite that audits your DAC clock, detects lossy Bluetooth compression bottlenecks (SBC/AAC @ 256kbps), and conducts 32 Hz sub-bass, 17.5 kHz treble air, and -45 dBFS noise floor acoustic tests.
 - **Legacy TV Support**: Preserved lightweight, CSS3-minimal interface at `/tv` specifically optimized for older Sony Bravia / Vewd TV browsers.
 
@@ -52,7 +49,7 @@ All manifests strictly declare `"allowDownloads": 0` for direct streaming compat
 | `/` | `GET` | Audiophile web portal, link generator, gear diagnostic lab, and player |
 | `/tv` | `GET` | Lightweight client for Sony Bravia & legacy Vewd TV browsers |
 | `/manifest.json` | `GET` | Universal addon manifest contract (`id: com.bitchord.qobuz`, `allowDownloads: 0`) |
-| `/u/:userSlug/manifest.json` | `GET` | Isolated personal gateway manifest with rate-limiting context |
+| `/u/:userSlug/manifest.json` | `GET` | Personal addon manifest |
 | `/search?q=...&quality=LOSSLESS` | `GET` | Races active lossless backends; returns normalized tracks with signed IDs |
 | `/stream/:id?quality=LOSSLESS` | `GET` | Resolves signed opaque track ID to direct playable HTTPS stream URL |
 | `/admin` | `GET` | Master Admin Console (user endpoint revocation & provider management) |
@@ -165,7 +162,7 @@ FLAC Relay does not depend on external authentication services and offers three 
 1. **Instant Access (Skip Login)**: 1-click guest onboarding. Users can generate, customize, and copy personal addon URLs without signing in or providing an email address.
 2. **Direct Google OAuth**: Sign in directly with Google (`/api/auth/google/login`). Uses `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Callback: `https://<domain>/api/auth/google/callback`.
 3. **Direct Discord OAuth**: Sign in directly with Discord (`/api/auth/discord/login`). Uses `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET`. Callback: `https://<domain>/api/auth/discord/callback`.
-4. **Resilient Local Storage Fallback**: If Supabase is down, paused, or unreachable, FLAC Relay automatically trips its circuit breaker and runs on autonomous in-memory storage so links, playback, and quotas never fail.
+4. **Resilient Local Storage Fallback**: If Supabase is down, paused, or unreachable, FLAC Relay automatically trips its circuit breaker and runs on autonomous in-memory storage for links and provider settings created in that process.
 
 ---
 
@@ -194,11 +191,11 @@ The computed 64-character hex signature is verified in Supabase upon addon claim
 - **Burner Email Shield**: Blocks disposable email providers (`tempmail`, `10minutemail`, `mailinator`, `guerrillamail`, `yopmail`, `throwawaymail`, etc.) to prevent automated burner account generation.
 - **Single-Addon Account Association**: Each verified email or Google account is bound to a single addon endpoint in Postgres.
 
-### 4. ⏱️ Upstream Rate Limiting & Sliding Device Leases
-Personal endpoints enforce strict quotas on stream resolution:
-- **300 Tracks / Day**: Rolling daily limit resetting at `00:00 UTC`.
-- **Max 2 Concurrent Devices**: Enforced via sliding 10-minute device leases (`addon_device_leases`) keyed to IP and User-Agent hashes.
-- **Max 15 Unique IPs / Day**: Anti-credential sharing protection that accommodates cellular and Wi-Fi handoffs without false positives.
+### 4. Playback and provider settings
+
+FLAC Relay delivers direct provider URLs and applies no song-count, concurrent-device, or unique-IP playback caps. Administrators can still revoke a personal link, and upstream providers may apply their own restrictions.
+
+Use **Admin → Import Addon** to register a compatible manifest. Imports stored in Supabase survive restarts. Without Supabase, imports added from the admin panel are in memory for the current process.
 
 ### 5. 🔐 Cryptographic Privacy & ID Signing
 - **Opaque Signed IDs**: Track identifiers are cryptographically signed with HMAC-SHA256 (`qobuz_...`) to prevent parameter tampering and brute-force ID guessing.

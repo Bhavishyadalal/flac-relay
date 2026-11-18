@@ -1,0 +1,882 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLAC Relay | Music addon &amp; web player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/panels.css">
+<link rel="stylesheet" href="/assets/relay.css">
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header class="relay-header">
+    <a href="/" class="relay-brand" aria-label="FLAC Relay home">
+      <span class="relay-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span>FLAC<span class="wordmark-accent"> Relay</span></span>
+    </a>
+    <nav aria-label="Main navigation" class="relay-nav">
+      <a href="#listen" aria-current="location">Listen</a>
+      <a href="#addon-section">Addon</a>
+      <a href="#hardware-lab">Audio lab</a>
+      <a href="/tv" class="nav-tv">TV</a>
+    </nav>
+    <div class="relay-account">
+      <button type="button" class="relay-sign-in" id="header-signin-btn" onclick="openAuthModal()">Sign in <span aria-hidden="true">→</span></button>
+      <div class="header-user-pill" id="header-user-pill" style="display:none">
+        <div class="header-user-avatar" id="header-user-avatar">U</div>
+        <span id="header-user-email"></span>
+        <button class="btn-logout" onclick="signOutUser()" aria-label="Sign out">→</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="relay-hero" id="listen" aria-labelledby="hero-title">
+      <div class="hero-art" aria-hidden="true"></div>
+      <div class="relay-hero-copy">
+        <h1 id="hero-title">Hear every<br><span>detail.</span></h1>
+        <p>Find a track and stream it in lossless quality, or connect FLAC Relay to your own player.</p>
+        <form class="search-bar" onsubmit="return handleSearchSubmit(event)">
+          <div class="search-input-box">
+            <svg class="search-icon-inside" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="search-input" id="search-query-input" aria-label="Track or artist" aria-keyshortcuts="/" type="text" placeholder="Search tracks or artists" autocomplete="off">
+          </div>
+          <button class="search-button" type="submit">
+            <span>Search</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </form>
+        <div class="sample-tags" aria-label="Suggested searches"><button type="button" class="sample-chip" onclick="quickSearch('Daft Punk Get Lucky')">Daft Punk</button>
+<button type="button" class="sample-chip" onclick="quickSearch('Pink Floyd Time')">Pink Floyd</button>
+<button type="button" class="sample-chip" onclick="quickSearch('The Weeknd Blinding Lights')">The Weeknd</button></div>
+      </div>
+      <div class="hero-footer">
+        <span class="gateway-state"><i aria-hidden="true"></i><span id="gateway-status">Checking gateway</span></span>
+        <span class="direct-playback">Direct playback</span>
+      </div>
+    </section>
+
+    <section class="relay-results" aria-label="Search results">
+      <div id="search-status" role="status"></div>
+      <div class="tracks-list" id="tracks-results-list"></div>
+    </section>
+
+    <nav class="relay-tools" aria-label="Setup and diagnostics">
+      <a href="#addon-section" class="relay-tool">
+        <span class="tool-icon tool-link" aria-hidden="true"></span>
+        <span><strong>Addon setup</strong><small>Connect your music app</small></span>
+        <span class="tool-arrow" aria-hidden="true">→</span>
+      </a>
+      <a href="#hardware-lab" class="relay-tool">
+        <span class="tool-icon tool-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span><strong>Audio lab</strong><small>Test your headphones and output</small></span>
+        <span class="tool-arrow" aria-hidden="true">→</span>
+      </a>
+    </nav>
+
+    <!-- Personal Addon Generator -->
+    <section class="glass-panel addon-generator" id="addon-section">
+      <!-- Anti-abuse error banner -->
+      <div class="anti-abuse-banner" id="anti-abuse-banner" style="display:none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <div class="anti-abuse-title">Anti-Abuse Protection Triggered</div>
+          <div class="anti-abuse-text" id="anti-abuse-text">This device or household is already linked to another personal endpoint. Only 1 personal addon endpoint is permitted per household to protect unmetered studio FLAC bandwidth. If you require private unlimited multi-device nodes, please check the Standalone Self-Host Release v1.0.0 on GitHub.</div>
+        </div>
+      </div>
+
+      <!-- Auth Gate (Shown when logged out) -->
+      <div class="auth-gate-box" id="auth-gate-box">
+        <div class="auth-gate-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Authentication & Abuse Wall Active
+        </div>
+        <h3>Claim Your Dedicated Lossless Addon Endpoint</h3>
+        <p>Sign in or continue as a guest to claim a personal addon link.</p>
+        <div class="auth-actions-group">
+          <button class="btn-google-login" onclick="loginWithGoogle()">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+            <span>Continue with Google</span>
+          </button>
+          <button class="btn-email-login" onclick="openAuthModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <span>Email Sign In / Magic Link</span>
+          </button>
+        </div>
+        <div class="auth-gate-sub">
+          <span>🔒 1 Endpoint per account/device</span> • <span>🍪 Signed __rz_tracker cookie tracking</span>
+        </div>
+      </div>
+
+      <!-- Verified user header (Shown when logged in) -->
+      <div id="verified-user-box" style="display:none;">
+        <div class="user-verified-header">
+          <div class="verified-tag">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 11 11 13 15 9"/></svg>
+            Session: <span id="auth-display-email" style="font-weight:700; color:#fff;"></span>
+          </div>
+          <span style="color:var(--text-secondary); font-size:12px;">Addon configuration</span>
+        </div>
+      </div>
+
+      <div class="generator-head">
+        <div class="generator-title">
+          <h2>Addon setup</h2>
+          <p>Copy the link below into your music app as a custom addon.</p>
+        </div>
+
+        <div class="token-controls">
+          <div class="slug-input-wrapper">
+            <span class="slug-prefix">/u/</span>
+            <input type="text" class="slug-input" id="slug-input" placeholder="my-tag" maxlength="32">
+          </div>
+          <button class="btn-icon" onclick="randomizeSlug()" title="Generate Random Alias">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.5 2-5 5M21.5 2H16M21.5 2v5.5M2.5 22l5-5M2.5 22H8M2.5 22v-5.5M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+          </button>
+          <button class="btn-generate" onclick="applyCustomSlug()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Update Token
+          </button>
+        </div>
+      </div>
+
+      <!-- Link Box -->
+      <div class="link-display-box">
+        <div class="link-content">
+          <span class="link-label">Addon manifest URL</span>
+          <span class="link-url" id="addon-url">Generating endpoint...</span>
+        </div>
+        <div class="link-actions">
+          <button class="btn-copy" onclick="copyAddonLink()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            <span id="copy-btn-text">Copy URL</span>
+          </button>
+          <button class="btn-icon" onclick="openQrModal()" title="Show Mobile QR Code">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
+          </button>
+          <a class="btn-install" id="install-bitchord-btn" href="#" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Install to App
+          </a>
+        </div>
+      </div>
+
+      <p class="addon-playback-note"><span aria-hidden="true"></span> No playback caps set by FLAC Relay.</p>
+    </section>
+
+    <!-- Provider Telemetry -->
+    <div class="section-head">
+      <div>
+        <h2>Music sources</h2>
+        <p style="font-size:14px; color:var(--text-muted);">Provider status and gateway connectivity.</p>
+      </div>
+      <button class="ping-btn" onclick="runLivePingCheck()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span id="ping-btn-text">Test Ping Latency</span>
+      </button>
+    </div>
+
+    <section class="providers-grid" id="providers-container">
+      <!-- Monochrome Core -->
+      <div class="provider-card">
+        <div>
+          <div class="provider-header">
+            <div class="provider-name-box">
+              <h3>Monochrome Lossless Core</h3>
+              <div class="provider-route">Route /c · Pure FLAC Stream API</div>
+            </div>
+            <span class="badge-status status-operational">
+              <span class="pulse-dot" style="width:6px; height:6px;"></span>
+              Operational
+            </span>
+          </div>
+          <div class="provider-desc">
+            Direct studio-grade lossless search index serving genuine 24-bit / 192 kHz FLAC streams with direct audio URI resolution.
+          </div>
+        </div>
+        <div class="provider-specs">
+          <div class="spec-item">
+            <span class="spec-label">Audio Depth</span>
+            <span class="spec-value">24-Bit / 192kHz</span>
+          </div>
+          <div class="spec-item" style="text-align:right;">
+            <span class="spec-label">Ping Latency</span>
+            <span class="spec-latency" id="ping-monochrome">310 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arcod Lossless Core -->
+      <div class="provider-card">
+        <div>
+          <div class="provider-header">
+            <div class="provider-name-box">
+              <h3>Lossless Core Source</h3>
+              <div class="provider-route">Route /f · Direct Stream API</div>
+            </div>
+            <span class="badge-status status-operational">
+              <span class="pulse-dot" style="width:6px; height:6px;"></span>
+              Operational
+            </span>
+          </div>
+          <div class="provider-desc">
+            High-speed lossless search index with direct audio URI resolution and sub-second cache hits.
+          </div>
+        </div>
+        <div class="provider-specs">
+          <div class="spec-item">
+            <span class="spec-label">Audio Depth</span>
+            <span class="spec-value">FLAC Lossless</span>
+          </div>
+          <div class="spec-item" style="text-align:right;">
+            <span class="spec-label">Ping Latency</span>
+            <span class="spec-latency" id="ping-arcod">380 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Standby Alternate -->
+      <div class="provider-card" style="opacity: 0.75;">
+        <div>
+          <div class="provider-header">
+            <div class="provider-name-box">
+              <h3>Lossless Alternate</h3>
+              <div class="provider-route">Route /e · Remote Proxy</div>
+            </div>
+            <span class="badge-status status-standby">Standby</span>
+          </div>
+          <div class="provider-desc">
+            Backup container running automated jitter retry backoff. Engages automatically during upstream fails.
+          </div>
+        </div>
+        <div class="provider-specs">
+          <div class="spec-item">
+            <span class="spec-label">Audio Depth</span>
+            <span class="spec-value">DASH / FLAC</span>
+          </div>
+          <div class="spec-item" style="text-align:right;">
+            <span class="spec-label">Status</span>
+            <span class="spec-value" style="color:var(--amber);">Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monitored Offline Source -->
+      <div class="provider-card" style="opacity: 0.5;">
+        <div>
+          <div class="provider-header">
+            <div class="provider-name-box">
+              <h3>Monochrome Core</h3>
+              <div class="provider-route">Route /c · Legacy FLAC</div>
+            </div>
+            <span class="badge-status status-offline">Offline</span>
+          </div>
+          <div class="provider-desc">
+            Host timed out. Automatically bypassed by racing provider to prevent search latency overhead.
+          </div>
+        </div>
+        <div class="provider-specs">
+          <div class="spec-item">
+            <span class="spec-label">Audio Depth</span>
+            <span class="spec-value">FLAC</span>
+          </div>
+          <div class="spec-item" style="text-align:right;">
+            <span class="spec-label">Status</span>
+            <span class="spec-value" style="color:var(--rose);">Offline</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================= -->
+    <!-- Lossless Audio & Hardware Diagnostic Lab Section -->
+    <!-- ============================================= -->
+    <section class="glass-panel lab-section" id="hardware-lab">
+      <div class="lab-pill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        Studio Lossless & Hardware Diagnostic Lab
+      </div>
+
+      <div class="lab-benchmark-header">
+        <div>
+          <h2 style="font-size:24px; font-weight:800; letter-spacing:-0.5px; margin-bottom:8px;">Lossless Audio & Hardware Capability Benchmark</h2>
+          <p style="font-size:14px; color:var(--text-secondary); max-width:760px; line-height:1.6; margin:0;">
+            Comprehensive cross-platform audio audit: probes your browser's native FLAC decoding engine, Web Audio clock frequency, DSP synthesis headroom (up to 192 kHz), and platform audio pipeline across Android and Windows.
+          </p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button class="lab-benchmark-btn" id="run-benchmark-btn" onclick="runHardwareBenchmark()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span id="benchmark-btn-text">Run Complete Hardware Benchmark</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Listening Hardware & Transducer Selector -->
+      <div class="gear-selector-box" style="margin-bottom:20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div>
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:var(--cyan); margin-bottom:2px;">
+              Acoustic Transmission Reality Check
+            </div>
+            <div style="font-size:15px; font-weight:700; color:#fff;">
+              Active Listening Hardware & Transducer Link
+            </div>
+          </div>
+          <button class="detect-gear-btn" onclick="detectHardwareDevices()" title="Scan browser audio endpoints">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Auto-Scan Endpoints</span>
+          </button>
+        </div>
+
+        <div class="gear-options-grid">
+          <button type="button" class="gear-opt-card active gear-lossy" id="gear-btn-bluetooth" onclick="selectListeningGear('bluetooth')">
+            <span class="gear-opt-badge badge-lossy">Lossy Link</span>
+            <div class="gear-opt-icon">🎧</div>
+            <div class="gear-opt-info">
+              <div class="gear-opt-name">Bluetooth (AAC / SBC)</div>
+              <div class="gear-opt-desc">Wireless lossy bottleneck &middot; ~256-328 kbps compression with brickwall filter</div>
+            </div>
+          </button>
+
+          <button type="button" class="gear-opt-card" id="gear-btn-wired" onclick="selectListeningGear('wired')">
+            <span class="gear-opt-badge badge-lossless">Lossless</span>
+            <div class="gear-opt-icon">🔌</div>
+            <div class="gear-opt-info">
+              <div class="gear-opt-name">Wired 3.5mm AUX / Jack</div>
+              <div class="gear-opt-desc">Direct analog output &middot; Up to OS mixer clock (44.1k - 192k)</div>
+            </div>
+          </button>
+
+          <button type="button" class="gear-opt-card" id="gear-btn-dac" onclick="selectListeningGear('dac')">
+            <span class="gear-opt-badge badge-studio">Audiophile</span>
+            <div class="gear-opt-icon">🎛️</div>
+            <div class="gear-opt-info">
+              <div class="gear-opt-name">External USB-C DAC / Amp</div>
+              <div class="gear-opt-desc">Dedicated hardware DAC &middot; Bit-perfect up to 192 kHz / 24-bit PCM</div>
+            </div>
+          </button>
+
+          <button type="button" class="gear-opt-card" id="gear-btn-speakers" onclick="selectListeningGear('speakers')">
+            <span class="gear-opt-badge badge-basic">Built-in</span>
+            <div class="gear-opt-icon">🔊</div>
+            <div class="gear-opt-info">
+              <div class="gear-opt-name">Device Speakers (Laptop / Phone)</div>
+              <div class="gear-opt-desc">Built-in transducers &middot; Limited frequency response & narrow stereo</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Progress Bar -->
+      <div class="benchmark-progress-wrap" id="benchmark-progress-wrap" style="display:none;">
+        <div class="benchmark-status-text">
+          <span id="benchmark-status-label">Initializing Audio Pipeline Probes...</span>
+          <span id="benchmark-percentage">0%</span>
+        </div>
+        <div class="benchmark-progress-bar-bg">
+          <div class="benchmark-progress-bar-fill" id="benchmark-progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Overall Audiophile Readiness Verdict -->
+      <div class="verdict-box verdict-warn" id="lab-verdict-box" style="margin-bottom:24px;">
+        <div class="verdict-badge badge-warn" id="verdict-badge-pill">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="verdict-tier-text">Tier 4 &middot; Lossy Wireless Bottleneck (AAC / SBC ~256 kbps)</span>
+        </div>
+        <h3 id="verdict-headline" style="font-size:22px; font-weight:800; color:#fff; margin-bottom:8px;">Lossy Bluetooth Codec Active (~256 kbps AAC / SBC)</h3>
+        <p id="verdict-summary" style="font-size:14px; line-height:1.6; max-width:760px; margin:0 auto; color:var(--text-secondary);">
+          Your browser decodes 24-bit / 192 kHz FLAC in software, but your headphones connect via Bluetooth A2DP. Bluetooth enforces lossy codec compression (AAC/SBC capped at ~256-328 kbps) with an inherent ~16.5-17.5 kHz brickwall filter. To experience uncompressed studio lossless (1,411 to 9,216 kbps PCM), connect via 3.5mm wired cable or an external USB-C DAC.
+        </p>
+
+        <!-- Dual Chain Audit Grid (Software Decoder vs Physical Transmission) -->
+        <div class="dual-chain-grid">
+          <div class="dual-chain-col">
+            <div class="dual-chain-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+              <span>Browser Bitstream Decoder</span>
+            </div>
+            <div class="dual-chain-val" id="audit-sw-val" style="color:#34d399;">24-Bit / 192 kHz FLAC Supported</div>
+            <div class="dual-chain-desc" id="audit-sw-desc">Chromium audio decoder &amp; Web Audio DSP synthesis engine pass uncompressed high-res container bitstreams.</div>
+          </div>
+
+          <div class="dual-chain-col">
+            <div class="dual-chain-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+              <span>Acoustic Output Reality</span>
+            </div>
+            <div class="dual-chain-val" id="audit-hw-val" style="color:var(--amber);">Lossy Wireless Link (~256 kbps)</div>
+            <div class="dual-chain-desc" id="audit-hw-desc">Audio is re-encoded by OS Bluetooth stack to AAC/SBC. Connect wired 3.5mm or USB-C DAC for true uncompressed playback.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4-Tier Native FLAC Decoding Matrix -->
+      <div style="margin-bottom:12px;">
+        <h4 style="font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); margin-bottom:10px;">
+          Hardware FLAC Bitstream Decoding Profiles (navigator.mediaCapabilities)
+        </h4>
+        <div class="flac-grid-4">
+          <!-- CD Standard -->
+          <div class="flac-tier-card tier-pass" id="tier-card-cd">
+            <div class="flac-tier-header">
+              <span class="flac-tier-name">Redbook CD</span>
+              <span class="flac-badge badge-supported" id="tier-badge-cd">Supported</span>
+            </div>
+            <div class="flac-tier-specs">16-Bit / 44.1 kHz</div>
+            <div class="flac-tier-bitrate">1,411 kbps PCM &middot; Stereo</div>
+            <div class="flac-badge-row">
+              <span class="flac-badge badge-hw-accel" id="tier-hw-cd">Hardware Decode</span>
+              <span class="flac-badge" style="background:rgba(255,255,255,0.06); color:#fff;">Lossless</span>
+            </div>
+          </div>
+
+          <!-- Studio Standard -->
+          <div class="flac-tier-card tier-pass" id="tier-card-studio">
+            <div class="flac-tier-header">
+              <span class="flac-tier-name">Studio Standard</span>
+              <span class="flac-badge badge-supported" id="tier-badge-studio">Supported</span>
+            </div>
+            <div class="flac-tier-specs">24-Bit / 48 kHz</div>
+            <div class="flac-tier-bitrate">2,304 kbps PCM &middot; Stereo</div>
+            <div class="flac-badge-row">
+              <span class="flac-badge badge-hw-accel" id="tier-hw-studio">Hardware Decode</span>
+              <span class="flac-badge" style="background:rgba(255,255,255,0.06); color:#fff;">Lossless</span>
+            </div>
+          </div>
+
+          <!-- High-Res Master -->
+          <div class="flac-tier-card tier-pass" id="tier-card-hires">
+            <div class="flac-tier-header">
+              <span class="flac-tier-name">High-Res Master</span>
+              <span class="flac-badge badge-supported" id="tier-badge-hires">Supported</span>
+            </div>
+            <div class="flac-tier-specs">24-Bit / 96 kHz</div>
+            <div class="flac-tier-bitrate">4,608 kbps PCM &middot; Studio</div>
+            <div class="flac-badge-row">
+              <span class="flac-badge badge-hw-accel" id="tier-hw-hires">Smooth Bitstream</span>
+              <span class="flac-badge" style="background:rgba(255,255,255,0.06); color:#fff;">Hi-Res</span>
+            </div>
+          </div>
+
+          <!-- Studio Master -->
+          <div class="flac-tier-card tier-pass" id="tier-card-master">
+            <div class="flac-tier-header">
+              <span class="flac-tier-name">Ultra Audiophile</span>
+              <span class="flac-badge badge-supported" id="tier-badge-master">Supported</span>
+            </div>
+            <div class="flac-tier-specs">24-Bit / 192 kHz</div>
+            <div class="flac-tier-bitrate">9,216 kbps PCM &middot; Master</div>
+            <div class="flac-badge-row">
+              <span class="flac-badge badge-hw-accel" id="tier-hw-master">Hardware Pass</span>
+              <span class="flac-badge" style="background:rgba(0,242,254,0.15); color:var(--cyan);">Studio Max</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hardware Audio Engine & DSP Specs -->
+      <div style="margin-bottom:12px;">
+        <h4 style="font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); margin-bottom:10px;">
+          Audio Subsystem & DSP Synthesis Engine
+        </h4>
+        <div class="hw-specs-grid">
+          <div class="hw-spec-card">
+            <div class="hw-spec-title">Active DAC Clock</div>
+            <div class="hw-spec-val" id="spec-sample-rate">48,000 <span style="font-size:14px; color:var(--text-muted);">Hz</span></div>
+            <div class="hw-spec-desc" id="spec-sample-rate-desc">Internal browser audio output rate</div>
+          </div>
+
+          <div class="hw-spec-card">
+            <div class="hw-spec-title">Max Synthesis Headroom</div>
+            <div class="hw-spec-val" id="spec-max-headroom">192,000 <span style="font-size:14px; color:var(--text-muted);">Hz</span></div>
+            <div class="hw-spec-desc">OfflineAudioContext synthesis limit</div>
+          </div>
+
+          <div class="hw-spec-card">
+            <div class="hw-spec-title">Channels & Latency</div>
+            <div class="hw-spec-val" id="spec-channels-latency">2.0 <span style="font-size:14px; color:var(--text-muted);">Stereo</span></div>
+            <div class="hw-spec-desc" id="spec-latency-desc">Low-latency audio buffer pipeline</div>
+          </div>
+
+          <div class="hw-spec-card">
+            <div class="hw-spec-title">DSP Synthesis Speed</div>
+            <div class="hw-spec-val" id="spec-dsp-throughput">-- <span style="font-size:14px; color:var(--text-muted);">M-Samples/s</span></div>
+            <div class="hw-spec-desc">Audio graph rendering throughput</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Platform Audio Pipeline (Android vs Windows) -->
+      <div class="platform-advisory-box">
+        <div class="platform-header-row">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span style="font-weight:800; font-size:15px; color:#fff;" id="platform-detect-name">Platform Audio Architecture</span>
+          </div>
+          <div class="platform-tag" id="platform-arch-tag">Detecting...</div>
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary); line-height:1.6; margin-bottom:14px;" id="platform-advisory-text">
+          Inspecting operating system audio graph...
+        </p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap:12px; font-size:12px; font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,0.3); padding:12px 16px; border-radius:10px;">
+          <div><span style="color:var(--text-muted);">GPU Engine:</span> <span id="platform-gpu-name" style="color:var(--cyan);">--</span></div>
+          <div><span style="color:var(--text-muted);">Output Route:</span> <span id="platform-output-route" style="color:#34d399;">Default Endpoint</span></div>
+          <div><span style="color:var(--text-muted);">Display Ratio:</span> <span id="platform-dpr" style="color:#fff;">--</span></div>
+          <div><span style="color:var(--text-muted);">CPU Concurrency:</span> <span id="platform-cores" style="color:#fff;">--</span></div>
+        </div>
+      </div>
+
+      <!-- Interactive Audiophile Sound Lab (True interactive verification, never fake-pass) -->
+      <div class="audition-toolkit-card">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h4 style="font-size:16px; font-weight:800; color:#fff; margin-bottom:4px;">Acoustic & Dynamic Range Calibration Lab</h4>
+            <p style="font-size:13px; color:var(--text-muted); margin:0;">
+              Audition instant acoustic calibration tones. Physically verify stereo separation, detect single-bud / mono issues, inspect Bluetooth AAC brickwall cutoffs, and probe sub-bass extension.
+            </p>
+          </div>
+          <button onclick="stopActiveTone()" style="background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.35); color:#fb7185; padding:8px 16px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">
+            ⏹ Stop Audio
+          </button>
+        </div>
+
+        <!-- 1. Interactive Physical Stereo Channel & Earbud Presence Verification -->
+        <div style="margin-top:18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <div style="font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; gap:6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+              <span>Physical Left / Right Channel &amp; Earbud Verification</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted);">
+              Play isolated tones &amp; confirm which ear hears sound
+            </div>
+          </div>
+
+          <div class="stereo-channel-grid">
+            <!-- Left Channel Test Panel -->
+            <div class="channel-test-panel">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; color:var(--cyan);">Left Channel (Ch 1)</span>
+                <span style="font-size:11px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace;">Pan: -1.0 (100% Left)</span>
+              </div>
+              <button type="button" class="channel-play-btn" id="btn-play-left-ch" onclick="playIsolatedChannel(0)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Play Left Channel Chime</span>
+              </button>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Where do you hear this sound?</div>
+              <div class="channel-choice-group" id="left-choice-group">
+                <button type="button" class="channel-choice-chip" id="choice-left-left" onclick="recordStereoResponse('left', 'left')">
+                  <span>◀ In Left Ear Only</span>
+                  <span style="font-size:10px; color:#34d399;">✓ Expected</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-left-both" onclick="recordStereoResponse('left', 'both')">
+                  <span>👥 In Both Ears</span>
+                  <span style="font-size:10px; color:var(--amber);">Mono Downmix</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-left-silent" onclick="recordStereoResponse('left', 'silent')">
+                  <span>🔇 Inaudible / Silence</span>
+                  <span style="font-size:10px; color:#fb7185;">Bud in Case?</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-left-right" onclick="recordStereoResponse('left', 'right')">
+                  <span>▶ In Right Ear</span>
+                  <span style="font-size:10px; color:var(--amber);">Inverted</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right Channel Test Panel -->
+            <div class="channel-test-panel">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; color:var(--purple);">Right Channel (Ch 2)</span>
+                <span style="font-size:11px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace;">Pan: +1.0 (100% Right)</span>
+              </div>
+              <button type="button" class="channel-play-btn" id="btn-play-right-ch" onclick="playIsolatedChannel(1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Play Right Channel Chime</span>
+              </button>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Where do you hear this sound?</div>
+              <div class="channel-choice-group" id="right-choice-group">
+                <button type="button" class="channel-choice-chip" id="choice-right-right" onclick="recordStereoResponse('right', 'right')">
+                  <span>▶ In Right Ear Only</span>
+                  <span style="font-size:10px; color:#34d399;">✓ Expected</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-right-both" onclick="recordStereoResponse('right', 'both')">
+                  <span>👥 In Both Ears</span>
+                  <span style="font-size:10px; color:var(--amber);">Mono Downmix</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-right-silent" onclick="recordStereoResponse('right', 'silent')">
+                  <span>🔇 Inaudible / Silence</span>
+                  <span style="font-size:10px; color:#fb7185;">Bud in Case?</span>
+                </button>
+                <button type="button" class="channel-choice-chip" id="choice-right-left" onclick="recordStereoResponse('right', 'left')">
+                  <span>◀ In Left Ear</span>
+                  <span style="font-size:10px; color:var(--amber);">Inverted</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Acoustic Result Banner -->
+          <div class="stereo-status-banner" id="stereo-status-banner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div id="stereo-status-banner-text">
+              ⚪ <strong>Stereo Separation Pending:</strong> Click <em>Play Left Channel</em> and <em>Play Right Channel</em> above, then confirm what you heard in each ear.
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Bluetooth AAC / SBC High-Frequency Cutoff & Aliasing Diagnostic -->
+        <div class="codec-probe-box">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
+            <div>
+              <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#c084fc; margin-bottom:2px;">
+                Lossy Bluetooth Codec Diagnostic
+              </div>
+              <div style="font-size:14px; font-weight:700; color:#fff;">
+                AAC &amp; SBC Codec Brickwall Cutoff &amp; Aliasing Probe
+              </div>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted);">
+              Audition ultrasonic test tones
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-secondary); line-height:1.5; margin-bottom:12px;">
+            Standard Bluetooth AAC (256 kbps) and SBC codecs apply brickwall low-pass filters between 16.5 kHz and 18.5 kHz. High frequencies transmitted through lossy codecs often create audible metallic chatter, flutter, or bird-like chirping in lower registers (intermodulation aliasing). True wired lossless DACs reproduce clean ultrasonic sines with zero audible buzz.
+          </p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="audition-tool-btn" style="flex:1; min-width:200px;" id="tool-probe-17k" onclick="toggleTone(17500, 0.12, 'tool-probe-17k')">
+              <div class="tool-btn-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>17.5 kHz AAC Brickwall Probe</span>
+              </div>
+              <div class="tool-btn-desc">Tests AAC 256kbps brickwall filter &amp; quantizer flutter.</div>
+            </button>
+            <button class="audition-tool-btn" style="flex:1; min-width:200px;" id="tool-probe-18k" onclick="toggleTone(18500, 0.10, 'tool-probe-18k')">
+              <div class="tool-btn-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>18.5 kHz SBC/AAC Cutoff Probe</span>
+              </div>
+              <div class="tool-btn-desc">Tests high-frequency limits of wireless audio receivers.</div>
+            </button>
+          </div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:8px;">
+            <span style="color:var(--text-muted); font-weight:700;">Diagnostic Guide:</span>
+            <span style="color:#34d399;">✓ Faint clean pitch or pure silence = True Lossless DAC Linearity</span>
+            <span style="color:#fb7185;">⚠️ Metallic buzzing or chirping = Bluetooth Codec Aliasing Distortion</span>
+          </div>
+        </div>
+
+        <!-- 3. Dynamic Range & Frequency Sweep Tools -->
+        <div style="margin-top:16px;">
+          <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:8px;">
+            Acoustic Sweeps &amp; Transducer Dynamics
+          </div>
+          <div class="audition-tools-grid" style="margin-top:0;">
+            <!-- Stereo Alternating Ping -->
+            <button class="audition-tool-btn" id="tool-stereo-ping" onclick="runStereoPingCheck()">
+              <div class="tool-btn-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+                <span>L / R Alternating Ping</span>
+              </div>
+              <div class="tool-btn-desc">Rapidly pulses Left, Center, and Right for quick acoustic checks.</div>
+            </button>
+
+            <!-- 20Hz - 20kHz Sweep -->
+            <button class="audition-tool-btn" id="tool-sweep" onclick="runFrequencySweep()">
+              <div class="tool-btn-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 12h5l3-9 4 18 3-9h5"/></svg>
+                <span>20Hz – 20kHz Sweep</span>
+              </div>
+              <div class="tool-btn-desc">Smooth logarithmic sine sweep from sub-bass to treble air.</div>
+            </button>
+
+            <!-- 30Hz Sub-Bass -->
+            <button class="audition-tool-btn" id="tool-sub-tone" onclick="toggleTone(30, 0.35, 'tool-sub-tone')">
+              <div class="tool-btn-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>30 Hz Sub-Bass Tone</span>
+              </div>
+              <div class="tool-btn-desc">Pure sub-bass vibration to test transducer physical rumble.</div>
+            </button>
+
+            <!-- 16kHz Treble Air -->
+            <button class="audition-tool-btn" id="tool-treble-tone" onclick="toggleTone(16000, 0.12, 'tool-treble-tone')">
+              <div class="tool-btn-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>16 kHz Treble Air Tone</span>
+              </div>
+              <div class="tool-btn-desc">Clean ultrasonic sine to test anti-aliasing reconstruction.</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Frequency / Panning Readout Gauge -->
+        <div class="sweep-gauge-box">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:var(--text-muted);">Audio State:</span>
+            <span id="tone-status-label" style="color:var(--cyan); font-weight:700;">Idle / Ready</span>
+          </div>
+          <div>
+            <span style="color:var(--text-muted);">Active Freq:</span>
+            <span id="sweep-freq-val" style="color:#34d399; font-weight:700; margin-left:4px;">-- Hz</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dual Architecture Information -->
+    <section class="dual-architecture">
+      <div class="arch-card">
+        <div>
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Hosted Gateway Platform
+          </h3>
+          <p>The site you are currently visiting. Built for effortless personal use with enterprise-grade protection for upstream sources.</p>
+          <ul>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Zero setup required — generate 1-click token
+            </li>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Direct playback across your devices
+            </li>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Automated provider failover and health telemetry
+            </li>
+          </ul>
+        </div>
+        <button class="btn-copy" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" style="justify-content:center;">Back to Top</button>
+      </div>
+
+      <div class="arch-card">
+        <div>
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
+            Self-Hosted Community Edition
+          </h3>
+          <p>Prefer running your own infrastructure? Download the standalone Node.js distribution without any authentication or rate limits.</p>
+          <ul>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Zero database, zero logins, zero stream limits
+            </li>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Deploy anywhere: Docker, VPS, Vercel, Railway
+            </li>
+            <li>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Full control over provider racing endpoints
+            </li>
+          </ul>
+        </div>
+        <a class="btn-install" href="https://github.com/Bhavishyadalal/flac-relay" target="_blank" rel="noopener noreferrer" style="justify-content:center;">
+          Get Standalone Release
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Sticky Player Bar -->
+  <div class="audiophile-player" id="audiophile-player" style="display: none;">
+    <div class="player-track-info">
+      <div class="playback-mark relay-glyph" id="player-vinyl" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="player-text">
+        <div class="player-title" id="player-track-title">Select Track</div>
+        <div class="player-artist" id="player-track-artist">Lossless FLAC</div>
+      </div>
+    </div>
+
+    <div class="player-controls-center">
+      <div class="native-audio-wrapper">
+        <audio id="main-audio-element" controls preload="none"></audio>
+      </div>
+    </div>
+
+    <div class="player-specs-pill">
+      <span class="player-flac-chip" id="player-quality-tag">LOSSLESS</span>
+      <span class="player-stream-source" id="player-source-tag" role="status">Direct stream</span>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay" id="auth-modal" onclick="if(event.target===this)closeAuthModal()">
+    <div class="auth-modal-card">
+      <button class="modal-close-btn" onclick="closeAuthModal()" title="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div style="text-align:center; margin-bottom: 24px;">
+        <div style="width: 44px; height: 44px; margin: 0 auto 12px; background: linear-gradient(135deg, var(--cyan), var(--purple)); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #041019;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        </div>
+        <h3 style="font-size: 20px; font-weight: 800; color:#fff;">Sign In to FLAC Relay</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Unlock your dedicated studio FLAC addon gateway</p>
+      </div>
+
+      <a href="/api/auth/google/login" class="btn-oauth" style="text-decoration:none; display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:12px; border-radius:12px; background:#ffffff; color:#1f2937; font-weight:700; font-size:14px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+        <span>Sign in with Google</span>
+      </a>
+
+      <a href="/api/auth/discord/login" class="btn-oauth" style="text-decoration:none; display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:12px; border-radius:12px; background:#5865F2; color:#ffffff; font-weight:700; font-size:14px; margin-bottom:16px; box-shadow:0 4px 12px rgba(88,101,242,0.3);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+        <span>Sign in with Discord</span>
+      </a>
+
+      <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 16px;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">or skip login</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+
+      <button onclick="continueAsGuest()" class="btn-guest-access" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border-radius:12px; background:linear-gradient(135deg, rgba(0,242,254,0.15), rgba(139,92,246,0.15)); border:1px solid var(--cyan); color:var(--cyan); font-weight:700; font-size:14px; cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span>Instant Access (Skip Login)</span>
+      </button>
+      <div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top: 10px;">Generates your personal addon link instantly with zero sign-in</div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="modal-overlay" id="qr-modal" onclick="if(event.target===this)closeQrModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeQrModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h3 style="font-size:20px; font-weight:800; color:#fff; margin-bottom:6px;">Scan with Music App</h3>
+      <p style="font-size:13px; color:var(--text-muted);">Point your mobile or TV camera at the QR code to load into Mochy, Metrofuse, EchoMusic, or custom player.</p>
+
+      <div class="qr-container" id="qr-code-svg-box"></div>
+
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cyan); word-break:break-all;" id="qr-modal-url"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div>FLAC Relay &middot; Music addon &amp; web player</div>
+    <div style="display:flex; gap:16px;">
+      <a href="/manifest.json" target="_blank">Root Manifest</a>
+      <a href="/api/telemetry" target="_blank">Telemetry API</a>
+      <a href="/tv">Legacy TV</a>
+      <a href="https://github.com/Bhavishyadalal/flac-relay" target="_blank" rel="noopener">Source Code</a>
+    </div>
+  </footer>
+</div>
+
+<script src="/assets/addon.js" defer></script>
+<script src="/assets/audio-lab.js" defer></script>
+<script src="/assets/player.js" defer></script>
+<script src="/assets/motion.js" defer></script>
+</body>
+</html>

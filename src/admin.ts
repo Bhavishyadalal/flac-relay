@@ -456,12 +456,11 @@ export function renderAdminHtml(): string {
                 <th>User / Email</th>
                 <th>Addon Manifest</th>
                 <th>Created</th>
-                <th>Daily Limit</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody id="addons-table-body">
-              <tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">Loading addons...</td></tr>
+              <tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:24px;">Loading addons...</td></tr>
             </tbody>
           </table>
         </div>
@@ -478,7 +477,7 @@ export function renderAdminHtml(): string {
               Automated Benchmark Addon Importer
             </div>
             <p style="font-size:13px; color:var(--text-muted); margin-top:4px;">
-              Paste any Stremio / Qobuz / Lossless manifest URL. The tester automatically runs a live benchmark query (testing manifest schema, search probe for known tracks, and stream link resolution). If it passes, it is added to the active racing pool.
+              Paste a compatible music addon manifest URL. The tester automatically runs a live benchmark query (testing manifest schema, search probe for known tracks, and stream link resolution). If it passes, it is added to the active racing pool.
             </p>
           </div>
         </div>
@@ -486,7 +485,7 @@ export function renderAdminHtml(): string {
         <div style="max-width:680px;">
           <label style="font-size:13px; font-weight:600; color:var(--text-muted);">Upstream Manifest URL</label>
           <div style="display:flex; gap:10px; margin-top:6px;">
-            <input type="url" id="import-url-input" class="input-field" placeholder="https://abc-addon.hostyay.xyz/manifest.json" style="margin:0;">
+            <input type="url" id="import-url-input" class="input-field" placeholder="https://your-addon.example/manifest.json" style="margin:0;">
             <button class="btn btn-primary" id="btn-import-addon" onclick="importAddonCandidate()" style="white-space:nowrap;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               Run Benchmark & Add
@@ -756,7 +755,7 @@ export function renderAdminHtml(): string {
       var searchInput = document.getElementById('addon-search-input');
       var query = searchInput ? searchInput.value.trim() : '';
 
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">Loading endpoints...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:24px;">Loading endpoints...</td></tr>';
       try {
         var url = '/api/admin/addons?limit=50';
         if (query) url += '&search=' + encodeURIComponent(query);
@@ -764,7 +763,7 @@ export function renderAdminHtml(): string {
         if (res.status === 401) return checkAuth();
         var data = await res.json();
         if (!data.addons || data.addons.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">No matching user addons found</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:24px;">No matching user addons found</td></tr>';
           return;
         }
 
@@ -788,12 +787,11 @@ export function renderAdminHtml(): string {
               '<button onclick="navigator.clipboard.writeText(\\'' + fullUrl + '\\'); showToast(\\'URL copied!\\');" style="background:none; border:none; color:var(--cyan); cursor:pointer;" title="Copy URL">' +
               '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button></td>' +
             '<td><span style="color:var(--text-muted);">' + dateStr + '</span></td>' +
-            '<td>' + (a.daily_limit || 300) + ' tracks/day</td>' +
             '<td>' + actionBtn + '</td>' +
           '</tr>';
         }).join('');
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--rose); padding:24px;">Error: ' + err.message + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--rose); padding:24px;">Error: ' + err.message + '</td></tr>';
       }
     }
 
