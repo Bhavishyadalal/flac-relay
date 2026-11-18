@@ -97,6 +97,8 @@ const manifests = {
 } as const;
 
 const webAssets = {
+  'admin.css': 'text/css; charset=utf-8',
+  'admin.js': 'text/javascript; charset=utf-8',
   'addon.js': 'text/javascript; charset=utf-8',
   'audio-lab.js': 'text/javascript; charset=utf-8',
   'motion.js': 'text/javascript; charset=utf-8',
@@ -166,15 +168,15 @@ app.get('/api/auth/config', async () => ({
   supabaseUrl: config.supabaseUrl,
   supabaseKey: config.supabaseKey,
   providers: {
-    google: Boolean(config.googleClientId),
-    discord: Boolean(config.discordClientId),
+    google: Boolean(config.googleClientId && config.googleClientSecret),
+    discord: Boolean(config.discordClientId && config.discordClientSecret),
     guest: true,
   },
 }));
 
 app.get('/api/auth/providers', async () => ({
-  google: Boolean(config.googleClientId),
-  discord: Boolean(config.discordClientId),
+  google: Boolean(config.googleClientId && config.googleClientSecret),
+  discord: Boolean(config.discordClientId && config.discordClientSecret),
   guest: true,
 }));
 
@@ -436,6 +438,7 @@ app.post<{ Body?: { email?: string; customSlug?: string; zombieTracker?: string;
         ok: true,
         isNew,
         slug: addon.addon_slug,
+        isRevoked: addon.is_revoked,
         email: addon.email,
         tracker,
       });

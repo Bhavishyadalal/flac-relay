@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FLAC Relay · Admin</title>
+  <link rel="stylesheet" href="/assets/admin.css">
+  <script src="/assets/admin.js" defer></script>
+</head>
+<body>
+  <header class="shell site-header">
+    <a href="/admin" class="brand">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span>FLAC <span>Relay</span></span>
+    </a>
+    <div class="actions">
+      <a href="/" class="button">Web player</a>
+      <button class="button" id="sign-out" hidden>Sign out</button>
+    </div>
+  </header>
+  <main class="shell">
+    <p class="session-check" id="session-check" role="status">Checking your session…</p>
+    <section id="login" class="panel login" aria-labelledby="login-title" hidden>
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <h1 id="login-title">Master Admin Access</h1>
+      <p>Sign in to add music sources and manage personal addon links.</p>
+      <form id="login-form" class="form-stack">
+        <label for="admin-password-input">Admin password</label>
+        <div class="password-field">
+          <input type="password" id="admin-password-input" required autocomplete="current-password">
+          <button id="password-toggle" class="button" type="button" aria-controls="admin-password-input" aria-pressed="false">Show</button>
+        </div>
+        <button type="submit" class="button primary">Sign in</button>
+        <p id="login-error" class="notice error" role="alert" hidden></p>
+      </form>
+    </section>
+    <div id="console" hidden>
+      <div class="intro">
+        <div><h1>Control center</h1><p>Manage sources for your FLAC Relay instance.</p></div>
+        <button id="add-source" class="button primary" type="button">+ Add source</button>
+      </div>
+      <dl class="stats panel">
+        <div><dt>Active sources</dt><dd id="active-providers">—</dd></div>
+        <div><dt>Personal links</dt><dd id="total-addons">—</dd></div>
+      </dl>
+      <nav class="tabs" aria-label="Admin sections">
+        <button type="button" aria-pressed="true" data-panel="providers">Sources</button>
+        <button type="button" aria-pressed="false" data-panel="addons">User links</button>
+        <button type="button" aria-pressed="false" data-panel="import">Add source</button>
+      </nav>
+      <section class="panel" id="panel-providers" aria-labelledby="providers-title">
+        <div class="panel-heading">
+          <div><h2 id="providers-title" tabindex="-1">Music sources</h2><p>Choose which sources FLAC Relay searches.</p></div>
+          <button class="button" id="refresh-providers" type="button">Refresh</button>
+        </div>
+        <div id="provider-list" class="record-list" aria-live="polite"></div>
+      </section>
+      <section class="panel" id="panel-addons" aria-labelledby="addons-title" hidden>
+        <div class="panel-heading"><div><h2 id="addons-title" tabindex="-1">Personal addon links</h2><p>Find a link by email or alias, then copy, revoke, or restore it.</p></div></div>
+        <form id="addon-search-form" class="inline-form">
+          <div class="form-stack"><label for="addon-search-input">Email or alias</label><input type="search" id="addon-search-input" placeholder="Search links"></div>
+          <button class="button" type="submit">Search</button>
+        </form>
+        <div id="addon-list" class="record-list" aria-live="polite"></div>
+        <div class="actions pagination" id="addon-pagination" hidden>
+          <button id="previous-addons" class="button" type="button">Previous</button>
+          <span id="addon-page-info"></span>
+          <button id="next-addons" class="button" type="button">Next</button>
+        </div>
+      </section>
+      <section class="panel" id="panel-import" aria-labelledby="import-title" hidden>
+        <div class="panel-heading">
+          <div><h2 id="import-title" tabindex="-1">Add a music source</h2><p>Connect another compatible music addon to FLAC Relay.</p></div>
+        </div>
+        <ol class="steps">
+          <li><strong>Copy the manifest link</strong><span>In the other addon's setup page, copy its install or manifest URL. A typical link ends in <code>/manifest.json</code>.</span></li>
+          <li><strong>Paste and test</strong><span>FLAC Relay checks that the addon can search for tracks and return a playable link.</span></li>
+          <li><strong>Try it in the player</strong><span>After a successful test, the source appears under Sources and is enabled for searches.</span></li>
+        </ol>
+        <form id="import-form" class="form-stack">
+          <label for="import-url-input">Addon manifest URL</label>
+          <input id="import-url-input" type="text" inputmode="url" placeholder="https://your-addon.example/manifest.json" required autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="button primary" type="submit">Test and add source</button>
+          <p id="import-feedback" class="notice" role="status" hidden></p>
+          <button id="view-imported-sources" class="button" type="button" hidden>View music sources</button>
+        </form>
+      </section>
+    </div>
+  </main>
+  <p id="toast" class="panel toast" role="status" hidden></p>
+</body>
+</html>

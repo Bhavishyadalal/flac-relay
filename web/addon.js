@@ -1,8 +1,6 @@
 (function() {
 
   // Anti-Sybil Addon Management & Direct Authentication
-  var currentUser = null;
-  var currentSession = null;
 
   // --- Anti-Abuse: Zombie Vault (Self-Healing Storage across LocalStorage & IndexedDB) ---
   var ZombieVault = {
@@ -190,230 +188,155 @@
     }
   }
 
-  // Self-healing cookie check & initial sync
-  (async function initSecurityVault() {
-    try {
-      var zombie = await ZombieVault.get();
-      var headers = {};
-      if (zombie) headers['X-Zombie-Tracker'] = zombie;
-      var meRes = await fetch('/api/auth/me', { headers: headers });
-      if (meRes.ok) {
-        var meData = await meRes.json();
-        if (meData.tracker) {
-          await ZombieVault.set(meData.tracker);
-        }
-      }
-    } catch (e) {}
-  })();
+  const authModal = document.getElementById('auth-modal');
+  const guestButton = document.getElementById('guest-access');
+  const personalButton = document.getElementById('personal-addon-btn');
+  let currentUser;
+  let currentSlug;
+  let copyTimer;
 
-  var currentUser = null;
-  var currentSession = null;
-  var currentSlug = localStorage.getItem('rezen_user_slug') || 'rz-' + Math.random().toString(36).substring(2, 8);
-  var slugInput = document.getElementById('slug-input');
-  if (slugInput) slugInput.value = currentSlug;
+  function setStatus(id, message) {
+    const status = document.getElementById(id);
+    status.hidden = !message;
+    status.textContent = message;
+  }
+
+  function getManifestUrl() {
+    const path = currentSlug ? '/u/' + encodeURIComponent(currentSlug) + '/manifest.json' : '/manifest.json';
+    return new URL(path, location.origin).href;
+  }
+
+  function updateAddonView() {
+    const url = getManifestUrl();
+    const link = document.getElementById('addon-url');
+    link.href = url;
+    link.textContent = url;
+    document.getElementById('addon-url-label').textContent = currentSlug ? 'Personal addon URL' : 'Public addon URL';
+    document.getElementById('install-bitchord-btn').href = 'bitchord://install-addon?url=' + encodeURIComponent(url);
+    personalButton.hidden = Boolean(currentSlug);
+  }
+
+  function renderAuthState(user) {
+    currentUser = user;
+    document.getElementById('header-signin-btn').style.display = user ? 'none' : '';
+    document.getElementById('header-user-pill').style.display = user ? 'inline-flex' : 'none';
+    if (user) {
+      const name = user.name || (user.email || '').split('@')[0] || 'Guest';
+      document.getElementById('header-user-email').textContent = name;
+      document.getElementById('header-user-avatar').textContent = name[0].toUpperCase();
+    }
+    updateAddonView();
+  }
 
   window.openAuthModal = function() {
-    var m = document.getElementById('auth-modal');
-    if (m) m.style.display = 'flex';
+    setStatus('auth-feedback', '');
+    if (!authModal.open) authModal.showModal();
   };
-  window.closeAuthModal = function() {
-    var m = document.getElementById('auth-modal');
-    if (m) m.style.display = 'none';
+  window.closeAuthModal = () => authModal.close();
+  authModal.addEventListener('click', event => {
+    if (event.target !== authModal) return;
+    const rect = authModal.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) authModal.close();
+  });
+  window.usePublicAddon = function() {
+    authModal.close();
+    document.getElementById('addon-section').scrollIntoView();
+    document.getElementById('addon-url').focus({ preventScroll: true });
   };
 
+  async function claimUserAddon(token) {
+    const tracker = await ZombieVault.get();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    if (tracker) headers['X-Zombie-Tracker'] = tracker;
+    const response = await fetch('/api/user/claim-addon', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ zombieTracker: tracker, hardwareFingerprint: await getHardwareFingerprint() })
+    });
+    const data = await response.json();
+    if (data.tracker) await ZombieVault.set(data.tracker);
+    if (!response.ok || !data.slug) throw new Error(data.error || 'Could not create a personal link.');
+    if (data.isRevoked) throw new Error('Your personal link was revoked.');
+    currentSlug = data.slug;
+    updateAddonView();
+  }
+
   window.continueAsGuest = async function() {
+    guestButton.disabled = true;
+    setStatus('auth-feedback', 'Creating your personal link…');
     try {
-      var res = await fetch('/api/auth/guest', { method: 'POST' });
-      var data = await res.json();
-      if (data.ok && data.user) {
-        currentUser = data.user;
-        renderAuthState(data.user);
-        await claimUserAddon(data.user, data.token);
-        closeAuthModal();
+      let token;
+      if (!currentUser) {
+        const response = await fetch('/api/auth/guest', { method: 'POST' });
+        const session = await response.json();
+        if (!response.ok || !session.user) throw new Error('Could not start a guest session.');
+        renderAuthState(session.user);
+        token = session.token;
       }
-    } catch (err) {
-      console.error('Guest access error:', err);
+      await claimUserAddon(token);
+      window.usePublicAddon();
+      setStatus('addon-help-status', 'Your personal link is ready to copy.');
+    } catch (error) {
+      setStatus('auth-feedback', error.message + ' You can still use the public link.');
+    } finally {
+      guestButton.disabled = false;
     }
   };
 
   window.signOutUser = async function() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {}
-    currentUser = null;
-    currentSession = null;
-    renderAuthState(null);
-  };
-
-  function getManifestUrl() {
-    return window.location.origin + '/u/' + currentSlug + '/manifest.json';
-  }
-
-  function updateAddonView() {
-    var urlEl = document.getElementById('addon-url');
-    var installBtn = document.getElementById('install-bitchord-btn');
-    var url = getManifestUrl();
-
-    if (urlEl) urlEl.innerText = url;
-    if (installBtn) {
-      installBtn.onclick = null;
-      installBtn.href = 'bitchord://install-addon?url=' + encodeURIComponent(url);
-    }
-  }
-
-  async function claimUserAddon(user, token, customSlug) {
-    try {
-      var zombieTracker = await ZombieVault.get();
-      var hwFingerprint = await getHardwareFingerprint();
-
-      var headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = 'Bearer ' + token;
-      if (zombieTracker) headers['X-Zombie-Tracker'] = zombieTracker;
-
-      var res = await fetch('/api/user/claim-addon', {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-          email: user ? user.email : undefined,
-          customSlug: customSlug,
-          zombieTracker: zombieTracker,
-          hardwareFingerprint: hwFingerprint
-        })
-      });
-      var data = await res.json();
-      var banner = document.getElementById('anti-abuse-banner');
-      var textEl = document.getElementById('anti-abuse-text');
-
-      if (data.tracker) {
-        await ZombieVault.set(data.tracker);
-      }
-
-      if (!res.ok) {
-        if (data.code === 'SYBIL_DETECTED' || res.status === 403) {
-          if (banner) banner.style.display = 'flex';
-          if (textEl) textEl.innerText = data.error || 'Anti-Abuse limit: Only 1 personal addon endpoint permitted per device.';
-        } else {
-          console.warn('Could not claim addon:', data.error);
-        }
-        return;
-      }
-
-      if (banner) banner.style.display = 'none';
-      currentSlug = data.slug;
-      localStorage.setItem('rezen_user_slug', currentSlug);
-      if (slugInput) slugInput.value = currentSlug;
-      updateAddonView();
-
-    } catch (err) {
-      console.error('Failed to claim addon link:', err);
-    }
-  }
-
-  function renderAuthState(user) {
-    currentUser = user;
-    var signinBtn = document.getElementById('header-signin-btn');
-    var userPill = document.getElementById('header-user-pill');
-    var userEmail = document.getElementById('header-user-email');
-    var userAvatar = document.getElementById('header-user-avatar');
-    var authGate = document.getElementById('auth-gate-box');
-    var verifiedBox = document.getElementById('verified-user-box');
-    var displayEmail = document.getElementById('auth-display-email');
-
-    if (user) {
-      if (signinBtn) signinBtn.style.display = 'none';
-      if (userPill) userPill.style.display = 'inline-flex';
-      var displayName = user.name || (user.email ? user.email.split('@')[0] : 'User');
-      if (userEmail) userEmail.innerText = displayName;
-      if (userAvatar) {
-        if (user.avatar) {
-          userAvatar.innerHTML = '<img src="' + user.avatar + '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;" alt="avatar">';
-        } else {
-          userAvatar.innerText = displayName[0].toUpperCase();
-        }
-      }
-      if (authGate) authGate.style.display = 'none';
-      if (verifiedBox) verifiedBox.style.display = 'block';
-      if (displayEmail) displayEmail.innerText = user.email || displayName;
-      updateAddonView();
-    } else {
-      if (signinBtn) signinBtn.style.display = 'inline-flex';
-      if (userPill) userPill.style.display = 'none';
-      if (authGate) authGate.style.display = 'none'; // Unlocked for seamless access
-      if (verifiedBox) verifiedBox.style.display = 'block';
-      if (displayEmail) displayEmail.innerText = 'Anonymous / Guest';
-      updateAddonView();
-    }
-  }
-
-  // Handle URL auth return parameters
-  var urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('auth') === 'success') {
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
-  if (urlParams.get('auth_error')) {
-    alert('Authentication Notice: ' + decodeURIComponent(urlParams.get('auth_error')));
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
-
-  // Bootstrap session from backend (/api/auth/me)
-  fetch('/api/auth/me')
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      if (data && data.authenticated && data.user) {
-        renderAuthState(data.user);
-        if (data.addon && data.addon.slug) {
-          currentSlug = data.addon.slug;
-          localStorage.setItem('rezen_user_slug', currentSlug);
-          if (slugInput) slugInput.value = currentSlug;
-          updateAddonView();
-        } else {
-          claimUserAddon(data.user);
-        }
-      } else {
-        renderAuthState(null);
-        // Automatically ensure guest addon is initialized
-        claimUserAddon(null);
-      }
-    })
-    .catch(function() {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!response.ok) throw new Error('Sign-out failed. Please try again.');
+      currentSlug = undefined;
       renderAuthState(null);
-      claimUserAddon(null);
-    });
-
-  window.randomizeSlug = function() {
-    var randomSuffix = Math.random().toString(36).substring(2, 8);
-    var targetSlug = 'rz-' + randomSuffix;
-    claimUserAddon(currentUser, '', targetSlug);
-  };
-  window.generateNewLink = window.randomizeSlug;
-
-  window.applyCustomSlug = function() {
-    if (!slugInput) return;
-    var raw = slugInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-    if (!raw) raw = 'rz-' + Math.random().toString(36).substring(2, 8);
-    claimUserAddon(currentUser, '', raw);
-    var btn = document.getElementById('copy-btn-text');
-    if (btn) btn.innerText = 'Token Saved!';
-    setTimeout(function() { if (btn) btn.innerText = 'Copy URL'; }, 1800);
+      setStatus('addon-help-status', 'Signed out. The public addon link is ready to copy.');
+    } catch (error) { setStatus('addon-help-status', error.message); }
   };
 
-  window.copyAddonLink = function() {
-    var url = getManifestUrl();
-    navigator.clipboard.writeText(url).then(function() {
-      var btn = document.getElementById('copy-btn-text');
-      if (btn) btn.innerText = 'Copied to Clipboard!';
-      setTimeout(function() { if (btn) btn.innerText = 'Copy URL'; }, 2200);
-    }).catch(function() {
-      prompt('Copy your addon URL:', url);
-    });
+  async function loadSession() {
+    try {
+      const tracker = await ZombieVault.get();
+      const response = await fetch('/api/auth/me', { headers: tracker ? { 'X-Zombie-Tracker': tracker } : {} });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.tracker) await ZombieVault.set(data.tracker);
+      if (!data.authenticated || !data.user || currentUser) return;
+      currentSlug = data.addon && !data.addon.isRevoked ? data.addon.slug : undefined;
+      renderAuthState(data.user);
+      if (data.addon?.isRevoked) {
+        setStatus('addon-help-status', 'Your personal link was revoked. The public link is available.');
+      } else if (!currentSlug && data.user.provider !== 'guest') {
+        await claimUserAddon();
+      }
+    } catch (error) { setStatus('addon-help-status', 'Your personal link could not be loaded. The public link is available.'); }
+  }
+
+  const authParams = new URLSearchParams(location.search);
+  if (authParams.has('auth') || authParams.has('auth_error')) {
+    setStatus('addon-help-status', authParams.get('auth_error') || 'Signed in.');
+    history.replaceState({}, document.title, location.pathname + location.hash);
+  }
+  updateAddonView();
+  void loadSession();
+  fetch('/api/auth/providers').then(response => response.ok ? response.json() : {}).then(providers => {
+    document.querySelectorAll('[data-auth-provider]').forEach(link => { link.hidden = providers[link.dataset.authProvider] !== true; });
+  }).catch(() => {});
+
+  window.copyAddonLink = async function() {
+    const url = getManifestUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      const label = document.getElementById('copy-btn-text');
+      label.textContent = 'Copied';
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => { label.textContent = 'Copy URL'; }, 2000);
+      setStatus('addon-help-status', 'Link copied. Paste it into your music app.');
+    } catch { prompt('Copy the addon link', url); }
   };
 
   // QR Modal
   window.openQrModal = function() {
-    if (!currentUser) {
-      openAuthModal();
-      return;
-    }
     var modal = document.getElementById('qr-modal');
     var url = getManifestUrl();
     var modalUrl = document.getElementById('qr-modal-url');
