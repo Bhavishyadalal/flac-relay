@@ -371,6 +371,14 @@
   var gatewayStatus = document.getElementById('gateway-status');
   var gatewayRetry = document.getElementById('gateway-retry');
   var checkingGateway = false;
+  var gatewaySuccesses = 0;
+
+  function markGatewayOnline() {
+    gatewaySuccesses++;
+    gatewayRetry.hidden = true;
+    gatewayStatus.dataset.state = 'online';
+    gatewayStatus.textContent = 'Gateway online';
+  }
 
   async function measureGateway() {
     var controller = new AbortController();
@@ -390,32 +398,37 @@
   async function checkGateway() {
     if (checkingGateway) return;
     checkingGateway = true;
+    var previousSuccesses = gatewaySuccesses;
     if (document.activeElement === gatewayRetry) gatewayStatus.focus();
     gatewayRetry.hidden = true;
     gatewayStatus.dataset.state = 'checking';
     gatewayStatus.textContent = 'Checking gateway';
     var delays = [1500, 4000];
     try {
-      for (var attempt = 0; ; attempt++) {
+      for (var attempt = 0; gatewaySuccesses === previousSuccesses; attempt++) {
         try {
           await measureGateway();
-          gatewayStatus.dataset.state = 'online';
-          gatewayStatus.textContent = 'Gateway online';
+          markGatewayOnline();
           return;
         } catch {
-          if (attempt === delays.length) break;
+          // A newer search, stream, or ping response is stronger evidence than this failed probe.
+          if (gatewaySuccesses !== previousSuccesses) return;
+          if (attempt === delays.length) {
+            gatewayStatus.dataset.state = 'offline';
+            gatewayStatus.textContent = 'Health check failed';
+            gatewayRetry.hidden = false;
+            return;
+          }
           gatewayStatus.textContent = 'Waiting for gateway';
           await new Promise(function(resolve) { setTimeout(resolve, delays[attempt]); });
         }
       }
-      gatewayStatus.dataset.state = 'offline';
-      gatewayStatus.textContent = 'Gateway unreachable';
-      gatewayRetry.hidden = false;
     } finally {
       checkingGateway = false;
     }
   }
 
+  window.addEventListener('relay:gateway-response', markGatewayOnline);
   gatewayRetry.addEventListener('click', checkGateway);
   window.addEventListener('online', checkGateway);
   checkGateway();
@@ -426,7 +439,9 @@
     button.disabled = true;
     label.textContent = 'Testing gateway';
     try {
-      label.textContent = 'Gateway · ' + await measureGateway() + ' ms';
+      var latency = await measureGateway();
+      markGatewayOnline();
+      label.textContent = 'Gateway · ' + latency + ' ms';
     } catch {
       label.textContent = 'Test failed · Retry';
     } finally {

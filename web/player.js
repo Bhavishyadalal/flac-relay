@@ -56,13 +56,14 @@
     searchStatus.textContent = 'Searching for “' + query + '”…';
     results.replaceChildren();
     try {
-      const response = await fetch('/search?' + new URLSearchParams({ q: query, quality: 'LOSSLESS' }), { signal: request.signal });
+      const response = await fetch('/search?' + new URLSearchParams({ q: query, quality: 'LOSSLESS' }), { cache: 'no-store', signal: request.signal });
       if (!response.ok) throw new Error('The search service is unavailable.');
       const { tracks } = await response.json();
       if (request.signal.aborted) return;
-      const found = Array.isArray(tracks) ? tracks : [];
-      searchStatus.textContent = found.length ? found.length + (found.length === 1 ? ' track' : ' tracks') : 'No tracks found. Try another song or artist.';
-      results.replaceChildren(...found.map(trackCard));
+      if (!Array.isArray(tracks)) throw new Error('Invalid search response');
+      window.dispatchEvent(new Event('relay:gateway-response'));
+      searchStatus.textContent = tracks.length ? tracks.length + (tracks.length === 1 ? ' track' : ' tracks') : 'No tracks found. Try another song or artist.';
+      results.replaceChildren(...tracks.map(trackCard));
     } catch {
       if (!request.signal.aborted) searchStatus.textContent = 'Search couldn’t connect. Try again in a moment.';
     }
@@ -81,11 +82,12 @@
     quality.textContent = track.audioQuality || track.format || 'Lossless';
     playbackStatus.textContent = 'Getting stream…';
     try {
-      const response = await fetch('/stream/' + encodeURIComponent(track.id) + '?quality=LOSSLESS', { signal: request.signal });
+      const response = await fetch('/stream/' + encodeURIComponent(track.id) + '?quality=LOSSLESS', { cache: 'no-store', signal: request.signal });
       if (!response.ok) throw new Error('Stream unavailable');
       const data = await response.json();
       if (request.signal.aborted) return;
       if (typeof data.url !== 'string' || !/^https:\/\//i.test(data.url)) throw new Error('Stream unavailable');
+      window.dispatchEvent(new Event('relay:gateway-response'));
       // Native audio plays the provider URL directly without a cross-origin Web Audio graph.
       quality.textContent = data.format || data.quality || quality.textContent;
       audio.src = data.url;
