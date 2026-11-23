@@ -1,4 +1,5 @@
 import type { QobuzProvider, QobuzStream, QobuzTrack, Quality } from '../types.js';
+import { boundedSearch, resolvePlayback } from './playback-race.js';
 
 export interface DynamicSource {
   id: string;
@@ -59,7 +60,7 @@ export class RacingProvider implements QobuzProvider {
     const activeSources = this.sources.filter(s => s.enabled !== false);
     if (activeSources.length === 0) return [];
 
-    return new Promise((resolve, reject) => {
+    return boundedSearch(new Promise((resolve, reject) => {
       let pending = activeSources.length;
       let anySuccess = false;
       let lastError: unknown;
@@ -93,32 +94,14 @@ export class RacingProvider implements QobuzProvider {
           }
         });
       }
-    });
+    }));
   }
 
   async getStream(trackId: string, quality: Quality, atmos: string): Promise<QobuzStream | null> {
-    const separator = trackId.indexOf(':');
-    if (separator > 0) {
-      const sourceName = trackId.slice(0, separator);
-      const upstreamId = trackId.slice(separator + 1);
-      const source = this.sources.find(candidate => (candidate.id === sourceName || candidate.name === sourceName));
-      if (source && source.enabled !== false) {
-        const stream = await source.provider.getStream(upstreamId, quality, atmos);
-        if (stream) return stream;
-      }
-    }
-
-    // Fallback: Try all enabled providers if prefix was missing or primary provider had no stream
-    for (const source of this.sources.filter(s => s.enabled !== false)) {
-      try {
-        const cleanId = trackId.includes(':') ? trackId.slice(trackId.lastIndexOf(':') + 1) : trackId;
-        const stream = await source.provider.getStream(cleanId, quality, atmos);
-        if (stream) return stream;
-      } catch {
-        // Continue fallback attempts
-      }
-    }
-    return null;
+    const active = this.sources.filter(source => source.enabled !== false);
+    return resolvePlayback(trackId, quality, atmos, active, source =>
+      this.sources.some(current => current.id === source.id && current.provider === source.provider && current.enabled !== false),
+    );
   }
 }
 

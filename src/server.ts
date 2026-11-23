@@ -6,11 +6,12 @@ import Fastify from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import { loadConfig, type Config } from './config.js';
 import { homePage, legacyTvPage } from './home.js';
-import { TtlCache } from './cache.js';
+import { InFlight, TtlCache } from './cache.js';
 import { AppError, badRequest, notFound } from './errors.js';
 import { normalizeTrack, streamResponse, upstreamIdFromPublicId } from './normalize.js';
 import { createProvider, createSourceProvider, type IsolatedSource } from './providers/index.js';
 import { RacingProvider } from './providers/racing.js';
+import { withRecordingHint } from './providers/playback-race.js';
 import { RemoteAddonProvider } from './providers/remote-addon.js';
 import {
   generateAdminToken,
@@ -33,7 +34,7 @@ import {
   fetchDiscordProfile,
 } from './auth.js';
 import { AddonDatabase } from './db.js';
-import type { QobuzProvider, Quality, PublicTrack } from './types.js';
+import type { QobuzProvider, QobuzStream, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
 const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] } });
@@ -636,6 +637,8 @@ registerAddon('/f', createSourceProvider(config, 'instable'), manifests.instable
 
 function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: string; name: string; version: string }): void {
   const searchCache = new TtlCache<PublicTrack[]>(config.cacheTtlMs);
+  const searchRequests = new InFlight<PublicTrack[]>();
+  const streamRequests = new InFlight<QobuzStream | null>();
   const route = (pathStr: string): string => `${prefix}${pathStr}` || '/';
 
   app.get(route('/manifest.json'), async (_request, reply) => reply.header('Cache-Control', 'public, max-age=3600, s-maxage=86400').send({
@@ -654,10 +657,15 @@ function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: 
     const cached = searchCache.get(key);
     if (cached) return reply.header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600').send({ tracks: cached });
     try {
-      const tracks = (await provider.search(query, quality, atmos)).flatMap(track => {
-        try { return [normalizeTrack(track, config.idSecret)]; } catch { return []; }
+      const tracks = await searchRequests.run(key, async () => {
+        const found = (await provider.search(query, quality, atmos)).flatMap(track => {
+          try {
+            return [normalizeTrack(provider instanceof RacingProvider ? withRecordingHint(track) : track, config.idSecret)];
+          } catch { return []; }
+        });
+        searchCache.set(key, found);
+        return found;
       });
-      searchCache.set(key, tracks);
       return reply.header('Cache-Control', 'public, max-age=30, s-maxage=300, stale-while-revalidate=600').send({ tracks });
     } catch (error) {
       const stale = searchCache.getStale(key);
@@ -674,12 +682,14 @@ function registerAddon(prefix: string, provider: QobuzProvider, manifest: { id: 
     const quality = parseQuality(request.query.quality);
     const atmos = request.query.atmos ?? 'auto';
     const id = request.params.id;
-    if (!/^qobuz_[A-Za-z0-9_-]{10,512}$/.test(id)) throw notFound('track not found');
+    if (!/^qobuz_[A-Za-z0-9_-]{10,1024}$/.test(id)) throw notFound('track not found');
     const upstreamId = upstreamIdFromPublicId(id, config.idSecret);
     if (!upstreamId) throw notFound('track not available');
-    const stream = await provider.getStream(upstreamId, quality, atmos);
+    const key = JSON.stringify([upstreamId, quality, atmos]);
+    const stream = await streamRequests.run(key, () => provider.getStream(upstreamId, quality, atmos));
     if (!stream) throw notFound('track not available');
-    try { return reply.send(streamResponse(stream, quality)); } catch { throw notFound('track has no playable rendition'); }
+    try { return reply.header('Cache-Control', 'private, no-store').send(streamResponse(stream, quality)); }
+    catch { throw notFound('track has no playable rendition'); }
   });
 }
 

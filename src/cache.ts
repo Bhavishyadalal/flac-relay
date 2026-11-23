@@ -15,3 +15,16 @@ export class TtlCache<V> {
     this.values.set(key, { value, expiresAt: Date.now() + this.ttlMs });
   }
 }
+
+/** Share concurrent requests without retaining signed stream URLs after they resolve. */
+export class InFlight<V> {
+  private readonly requests = new Map<string, Promise<V>>();
+
+  run(key: string, load: () => Promise<V>): Promise<V> {
+    const existing = this.requests.get(key);
+    if (existing) return existing;
+    const pending = Promise.resolve().then(load).finally(() => this.requests.delete(key));
+    this.requests.set(key, pending);
+    return pending;
+  }
+}
