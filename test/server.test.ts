@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { app } from '../src/server.js';
 import { publicId } from '../src/normalize.js';
+import { withRecordingHint } from '../src/providers/playback-race.js';
 import { loadConfig } from '../src/config.js';
 
 const config = loadConfig();
@@ -90,6 +91,21 @@ test('GET /stream rejects tampered signed id', async () => {
   const tampered = `${validId.slice(0, -1)}x`;
   const res = await app.inject({ method: 'GET', url: `/stream/${tampered}` });
   assert.equal(res.statusCode, 404);
+});
+
+test('GET /stream opens a signed recording ID longer than 100 characters', async () => {
+  const track = withRecordingHint({
+    upstreamId: 'monochrome:12345',
+    title: 'One Kiss (with Dua Lipa)',
+    artist: 'Calvin Harris, Dua Lipa',
+    duration: 215,
+  });
+  const id = publicId(track, config.idSecret);
+  assert.ok(id.length > 100);
+  const res = await app.inject({ method: 'GET', url: `/stream/${id}` });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['cache-control'], 'private, no-store');
+  assert.match(JSON.parse(res.payload).url, /\/track\/12345$/);
 });
 
 test('GET /api/auth/config returns Supabase config', async () => {

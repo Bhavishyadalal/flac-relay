@@ -37,7 +37,11 @@ import { AddonDatabase } from './db.js';
 import type { QobuzProvider, QobuzStream, Quality, PublicTrack } from './types.js';
 
 const config = loadConfig();
-const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] } });
+const app = Fastify({
+  logger: { redact: ['req.headers.authorization', 'req.headers.cookie', '*.url'] },
+  // Signed recording hints may exceed Fastify's default 100-character path parameter limit.
+  routerOptions: { maxParamLength: 1030 },
+});
 const db = new AddonDatabase(config);
 const racingEngine = createProvider(config);
 
